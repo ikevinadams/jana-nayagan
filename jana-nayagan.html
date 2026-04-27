@@ -1189,6 +1189,11 @@
       variants: ['obstacle_pillar_debris'],
       spriteH: 220, hitW: 150, topInset: 0.10, isPlatform: true,
       weight: 8,
+      // Light concrete reads too bright against the dark world and looks
+      // floaty. Crush brightness + sink slightly into the floor so the
+      // rubble base reads as resting on the ground.
+      filter: 'brightness(0.62) contrast(1.22) saturate(0.88)',
+      yOffset: 14,
     },
     rubble_pile: {
       variants: ['obstacle_rubble_pile'],
@@ -1226,13 +1231,8 @@
       sparks: true, sparkRate: 0.4,
       weight: 10,
     },
-    sparking_cables: {
-      // Small ground-level hazard, has to be jumped over
-      variants: ['obstacle_sparking_cables'],
-      spriteH: 45, hitW: 200, topInset: 1.0, isPlatform: false,
-      sparks: true, sparkRate: 0.9,
-      weight: 6,
-    },
+    // (sparking_cables removed — visually too noisy; played as a floating
+    // mess of wires that didn't sit naturally on the ground.)
     // (oil_drums def deleted — no longer spawns or renders anywhere.)
   };
 
@@ -1865,6 +1865,11 @@
   function spawnBoss() {
     const def = CFG.enemies.boss;
     const x = game.cameraX + W + 100;
+    // Boss arrives SOLO — clear out every minion currently on screen so the
+    // duel is one-on-one. Their bullets get cleared too so the player isn't
+    // stunlocked the moment the boss appears.
+    enemies.length = 0;
+    enemyBullets.length = 0;
     enemies.push({
       kind: 'boss',
       x, y: groundY() - def.h,
@@ -2156,9 +2161,9 @@
       input.switch = 0;
     }
 
-    // spawners
+    // spawners — paused while boss is on screen so the duel is solo
     game.spawnTimer += dt;
-    if (game.spawnTimer >= game.nextEnemyAt) {
+    if (!game.bossActive && game.spawnTimer >= game.nextEnemyAt) {
       spawnEnemy();
       game.spawnTimer = 0;
       // spawn rate ramps over time
@@ -2835,45 +2840,9 @@
     vig.addColorStop(1,   'rgba(0,0,0,0.55)');
     ctx.fillStyle = vig;
     ctx.fillRect(0, baseY, W, H-baseY);
-    // metal panel seams
-    ctx.strokeStyle = 'rgba(255,255,255,0.04)';
-    ctx.lineWidth = 1;
-    const tile = 90;
-    const off = -((camOff) % tile);
-    for (let i=-1; i<W/tile+2; i++) {
-      const x = i*tile + off;
-      ctx.beginPath();
-      ctx.moveTo(x, baseY+6);
-      ctx.lineTo(x, H);
-      ctx.stroke();
-    }
-    // rivets
-    ctx.fillStyle = 'rgba(255,255,255,0.06)';
-    for (let i=-1; i<W/tile+2; i++) {
-      const x = i*tile + off + 6;
-      ctx.fillRect(x, baseY+10, 2, 2);
-      ctx.fillRect(x, baseY+24, 2, 2);
-    }
-    // scattered rubble piles + oil drums
-    const seed = Math.floor(camOff / 220);
-    for (let k=-1; k<W/220+2; k++) {
-      const rx = k*220 - (camOff % 220);
-      const r = Math.abs(Math.sin((seed+k)*5.71) * 43758.5453 % 1);
-      // Oil drum block removed entirely — generated obstacles + the painted
-      // floor are sufficient, no need for procedural drums baked into the strip.
-      if (r > 0.55) {
-        // small rubble pile — purely decorative, blends with the dark floor
-        ctx.fillStyle = '#15171c';
-        ctx.beginPath();
-        ctx.moveTo(rx, baseY);
-        ctx.lineTo(rx+10, baseY-10);
-        ctx.lineTo(rx+22, baseY-6);
-        ctx.lineTo(rx+34, baseY-14);
-        ctx.lineTo(rx+44, baseY);
-        ctx.closePath();
-        ctx.fill();
-      }
-    }
+    // (Metal panel seams + rivets removed — they were drawing as evenly-
+    // spaced vertical lines across the floor, breaking the painted-look.
+    // The flat gradient + vignette above is now the only floor treatment.)
   }
 
   function drawWorld() {
