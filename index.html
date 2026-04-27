@@ -1227,10 +1227,10 @@
       // hitbox (bottom 22% of sprite ≈ 105px) the same physical size as
       // before — wreck reads imposing but still single-jump clearable.
       variants: ['obstacle_burning_wreck','obstacle_burning_wreck_b','obstacle_burning_wreck_c'],
-      spriteH: 480, hitW: 240, topInset: 0.78, isPlatform: false,
+      spriteH: 440, hitW: 220, topInset: 0.76, isPlatform: false,
       smoke: true, smokeAtY: 0.35,
       weight: 10,
-      yOffset: 24,
+      yOffset: 22,
     },
     robot_pile: {
       variants: ['obstacle_robot_pile','obstacle_robot_pile_b'],
@@ -1245,7 +1245,32 @@
 
   let obstacles = [];
 
+  // Track the last 2 kinds picked — when the new pick matches one of them,
+  // reroll once. Forces variety: same kind never appears 3× in a row, and
+  // back-to-back repeats are filtered.
+  let _lastObstacleKinds = [];
   function pickWeightedObstacleKind() {
+    const pickOnce = () => {
+      let total = 0;
+      for (const k in OBSTACLE_DEFS) total += OBSTACLE_DEFS[k].weight;
+      let r = Math.random() * total;
+      for (const k in OBSTACLE_DEFS) {
+        r -= OBSTACLE_DEFS[k].weight;
+        if (r <= 0) return k;
+      }
+      return Object.keys(OBSTACLE_DEFS)[0];
+    };
+    let pick = pickOnce();
+    // If the new pick is in the last-2 list, reroll once. Don't loop forever
+    // — a single reroll is enough to break tedious back-to-backs without
+    // forcing long, awkward weighted-bias detours.
+    if (_lastObstacleKinds.includes(pick)) pick = pickOnce();
+    _lastObstacleKinds = [pick, _lastObstacleKinds[0]].filter(Boolean);
+    return pick;
+  }
+  // (legacy single-pass picker kept below as fallback for safety —
+  //  unreachable in the current codebase but preserved for clarity.)
+  function pickWeightedObstacleKind_legacy() {
     let total = 0;
     for (const k in OBSTACLE_DEFS) total += OBSTACLE_DEFS[k].weight;
     let r = Math.random() * total;
@@ -1271,17 +1296,22 @@
     const baseY = groundY();
     const x = game.cameraX + W + 200;
     const spriteY = baseY - def.spriteH;
+    // Visual yOffset (default 14) shifts the rendered sprite DOWN to feather
+    // into the floor. Collision tiers must shift by the same amount or the
+    // player tries to land on the visible top but gets pushed back because
+    // the invisible "true top" sits 14px above the visible top.
+    const yOff = def.yOffset != null ? def.yOffset : 14;
     // Compute landing tiers — each tier is { x0_world, x1_world, topY }
     let tiers;
     if (def.tiers && def.tiers.length) {
       tiers = def.tiers.map(t => ({
         x0: x + (drawnW - def.hitW) / 2 + def.hitW * t.x0,
         x1: x + (drawnW - def.hitW) / 2 + def.hitW * t.x1,
-        topY: spriteY + def.spriteH * t.topInsetFrac,
+        topY: spriteY + def.spriteH * t.topInsetFrac + yOff,
       }));
     } else {
       const hitX = x + (drawnW - def.hitW) / 2;
-      tiers = [{ x0: hitX, x1: hitX + def.hitW, topY: spriteY + def.spriteH * def.topInset }];
+      tiers = [{ x0: hitX, x1: hitX + def.hitW, topY: spriteY + def.spriteH * def.topInset + yOff }];
     }
     // Highest tier (lowest topY) determines the obstacle's "solid top" for blocking
     const topY = tiers.reduce((acc, t) => Math.min(acc, t.topY), Infinity);
@@ -1915,6 +1945,13 @@
     // stunlocked the moment the boss appears.
     enemies.length = 0;
     enemyBullets.length = 0;
+    // Snapshot ammo + unlocks so we can restore exactly the same loadout
+    // after the boss dies. During the fight, all weapons are unlocked and
+    // ammo is effectively infinite — this is a hero-mode set-piece.
+    game.ammoBeforeBoss = { ...game.ammo };
+    game.unlocksBeforeBoss = { ...game.weaponsUnlocked };
+    game.weaponsUnlocked = { pistol: true, smg: true, rocket: true };
+    game.ammo = { pistol: Infinity, smg: Infinity, rocket: Infinity };
     enemies.push({
       kind: 'boss',
       x, y: groundY() - def.h,
@@ -2097,8 +2134,29 @@
 
   function damageEnemy(e, dmg, srcX, srcY, fromExplosion) {
     if (e.hp <= 0 || e.dying) return;
+    const def = CFG.enemies[e.kind];
+    const hpBefore = e.hp;
     e.hp -= dmg;
     e.hitFlash = 0.12;
+    // Boss-fight balancing: when the boss drops below 50% HP for the first
+    // time, the hero gets a full heal as a comeback reward. One-shot per
+    // boss instance — prevents abuse via incremental hits.
+    if (def.isBoss && !e.healAwarded && hpBefore > e.maxHp * 0.5 && e.hp <= e.maxHp * 0.5) {
+      e.healAwarded = true;
+      player.hp = CFG.playerHpMax;
+      flashText('+HEAL', '#2bd66e', player.x, player.y - 30);
+      // small green particle burst around hero
+      for (let i=0; i<22; i++) {
+        particles.push({
+          kind:'spark',
+          x: player.x + player.w/2 + rand(-30,30),
+          y: player.y + player.h/2 + rand(-40,40),
+          vx: rand(-200,200), vy: rand(-260,-60),
+          life: rand(0.4, 0.8), maxLife: 0.8,
+          color: '#2bd66e', size: rand(2,3.5),
+        });
+      }
+    }
     damageNumbers.push({ x: e.x + e.w/2, y: e.y, vx: rand(-20,20), vy: -120, life: 0.7, text: Math.ceil(dmg), color:'#fff' });
     // hit sparks
     for (let i=0;i<6;i++){
@@ -2172,6 +2230,16 @@
       game.shake = Math.max(game.shake, 30);
       flashText('BOSS DOWN', '#2bd66e', e.x + e.w/2, e.y - 20);
       sfxExplosion();
+      // Restore the player's pre-boss loadout — back to normal ammo + the
+      // weapon unlocks they had before the encounter.
+      if (game.ammoBeforeBoss) {
+        game.ammo = game.ammoBeforeBoss;
+        game.ammoBeforeBoss = null;
+      }
+      if (game.unlocksBeforeBoss) {
+        game.weaponsUnlocked = game.unlocksBeforeBoss;
+        game.unlocksBeforeBoss = null;
+      }
       // Show continue-or-end choice after a brief beat
       setTimeout(() => {
         if (game.state === 'play') showContinueChoice();
