@@ -3242,15 +3242,14 @@
 
     let key;
     if (def.isBoss) {
-      // Boss: shoot pose locks for ~0.4s after firing. While moving we use
-      // ONLY boss_walk_a (true side profile facing left). The previously-used
-      // boss_walk_b was generated as a 3/4 near-front view, so alternating
-      // with it made the boss visibly rotate his torso every half-step — read
-      // as flipping. Sticking to walk_a + idle's wobble gives a clean stride.
+      // Boss: shoot pose locks for ~0.4s after firing, otherwise 2-frame walk
+      // cycle (walk_a = left leg forward, walk_b = right leg forward — both
+      // true side profile facing left), idle stance when standing still.
       if (e.shootFlash && e.shootFlash > 0) {
         key = 'boss_shoot';
       } else if (moving) {
-        key = 'boss_walk_a';
+        const tick = Math.sin(e.walkPhase * 1.4) > 0;
+        key = tick ? 'boss_walk_a' : 'boss_walk_b';
       } else {
         key = 'boss_idle';
       }
