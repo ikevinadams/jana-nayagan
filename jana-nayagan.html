@@ -784,8 +784,13 @@
       // Boss villain — scripted spawn, huge HP, big revolver shots.
       // Sized to match hero (playerSpriteH = 240) so they read as equals
       // visually rather than the boss towering over the hero.
-      boss:    { hp: 120, w: 90, h: 200, speed: 90, score: 800, dmg: 22, melee: 0,
-                 color: '#3a3f4a', accent: '#ffae3d', ranged: true, fireRate: 1.4, bulletSpeed: 820,
+      // Boss balance: 95 HP (was 120 — 21% nerf), 16 dmg/shot (was 22 — 27%
+      // nerf), 1.75s fire rate (was 1.4 — 25% slower), bullet speed 740
+      // (was 820 — 10% slower → more reaction time). Combined with the
+      // mid-fight heal at 50% HP and infinite ammo during the encounter,
+      // this lands at a roughly 50/50 win rate for an attentive player.
+      boss:    { hp: 95, w: 90, h: 200, speed: 90, score: 800, dmg: 16, melee: 0,
+                 color: '#3a3f4a', accent: '#ffae3d', ranged: true, fireRate: 1.75, bulletSpeed: 740,
                  spriteH: 240, isBoss: true },
     },
 
@@ -1213,12 +1218,33 @@
     cargo_crates: {
       variants: ['obstacle_cargo_crates','obstacle_cargo_crates_b','obstacle_cargo_crates_c'],
       spriteH: 260, hitW: 300, topInset: 0.06, isPlatform: true,
-      // Multi-tier platform — left/right halves sit at different heights so the
-      // hero steps DOWN automatically when walking from the upper to the lower stack.
+      // Default tiers (used as fallback) match the _a layout — tall on left.
       tiers: [
-        { x0: 0.00, x1: 0.56, topInsetFrac: 0.06 },   // upper container (high)
-        { x0: 0.56, x1: 1.00, topInsetFrac: 0.42 },   // exposed lower container (lower)
+        { x0: 0.00, x1: 0.50, topInsetFrac: 0.06 },
+        { x0: 0.50, x1: 1.00, topInsetFrac: 0.42 },
       ],
+      // Per-variant tier overrides — each PNG has a different stack layout
+      // and the previous shared-tier config only matched one of them. Now
+      // every variant gets its own tier map so the player lands cleanly on
+      // whatever container is visually in front of them.
+      variantTiers: {
+        // _a: tall on LEFT, shorter on RIGHT
+        'obstacle_cargo_crates': [
+          { x0: 0.00, x1: 0.50, topInsetFrac: 0.06 },
+          { x0: 0.50, x1: 1.00, topInsetFrac: 0.42 },
+        ],
+        // _b: tall on RIGHT, shorter on LEFT (mirrored)
+        'obstacle_cargo_crates_b': [
+          { x0: 0.00, x1: 0.50, topInsetFrac: 0.42 },
+          { x0: 0.50, x1: 1.00, topInsetFrac: 0.06 },
+        ],
+        // _c: 3-tier stairstep — tall left, mid middle, short right
+        'obstacle_cargo_crates_c': [
+          { x0: 0.00, x1: 0.36, topInsetFrac: 0.06 },
+          { x0: 0.36, x1: 0.66, topInsetFrac: 0.30 },
+          { x0: 0.66, x1: 1.00, topInsetFrac: 0.55 },
+        ],
+      },
       weight: 8,
       // Containers were rendering too bright + teal-tinted, popping out of
       // the dark scene. Crush brightness, ease saturation, lift toe so the
@@ -1262,9 +1288,9 @@
       variants: ['obstacle_jersey_barrier'],
       spriteH: 160, hitW: 200, topInset: 0.10, isPlatform: true,
       weight: 9,
-      // Concrete + yellow stripe was popping; crush brightness more and
-      // bump contrast to push the bright concrete down into the haze.
-      filter: 'brightness(0.60) contrast(1.20) saturate(0.78)',
+      // Concrete + yellow stripe was still popping. Crushed harder so the
+      // barrier sits in the dark scene rather than hovering above it.
+      filter: 'brightness(0.50) contrast(1.20) saturate(0.74)',
       yOffset: 24,
     },
     collapsed_billboard: {
@@ -1336,10 +1362,13 @@
     // player tries to land on the visible top but gets pushed back because
     // the invisible "true top" sits 14px above the visible top.
     const yOff = def.yOffset != null ? def.yOffset : 14;
+    // Per-variant tier overrides take priority over def.tiers — used by
+    // cargo_crates where each PNG has a totally different stack shape.
+    const tierSrc = (def.variantTiers && def.variantTiers[variant]) || def.tiers;
     // Compute landing tiers — each tier is { x0_world, x1_world, topY }
     let tiers;
-    if (def.tiers && def.tiers.length) {
-      tiers = def.tiers.map(t => ({
+    if (tierSrc && tierSrc.length) {
+      tiers = tierSrc.map(t => ({
         x0: x + (drawnW - def.hitW) / 2 + def.hitW * t.x0,
         x1: x + (drawnW - def.hitW) / 2 + def.hitW * t.x1,
         topY: spriteY + def.spriteH * t.topInsetFrac + yOff,
@@ -1443,21 +1472,22 @@
       // this overlaps and absorbs the asset's built-in elliptical drop shadow
       // INSIDE the dark zone, hiding its edge. Outside that plateau, feather
       // gracefully out to fully transparent. Bigger overall radius too.
-      // Wider radius + slightly less squashed (Y scale 0.32 → 0.42) so the
-      // shadow extends further DOWN from the obstacle base, giving a more
-      // grounded "this thing has weight" feel. Origin pulled down a couple
-      // pixels too so the shadow's center sits at the obstacle's footprint.
-      const shadowR = o.w * 1.30;
+      // Wider radius (1.55 — was 1.30) and lower center intensity (0.62
+      // peak — was 0.96) so the shadow extends gracefully outward instead
+      // of stamping a hard dark blob. Less squashed Y scale (0.42) keeps
+      // the downward reach. Net effect: gentler, broader, more believable
+      // contact-shadow that blends into the floor on every side.
+      const shadowR = o.w * 1.55;
       ctx.save();
       ctx.translate(cx, baseY + 2);
       ctx.scale(1, 0.42);
       const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, shadowR);
-      grad.addColorStop(0,    'rgba(0,0,0,0.96)');
-      grad.addColorStop(0.20, 'rgba(0,0,0,0.92)');
-      grad.addColorStop(0.35, 'rgba(0,0,0,0.80)');
-      grad.addColorStop(0.55, 'rgba(0,0,0,0.45)');
-      grad.addColorStop(0.75, 'rgba(0,0,0,0.18)');
-      grad.addColorStop(0.90, 'rgba(0,0,0,0.05)');
+      grad.addColorStop(0,    'rgba(0,0,0,0.62)');
+      grad.addColorStop(0.20, 'rgba(0,0,0,0.55)');
+      grad.addColorStop(0.40, 'rgba(0,0,0,0.42)');
+      grad.addColorStop(0.60, 'rgba(0,0,0,0.26)');
+      grad.addColorStop(0.80, 'rgba(0,0,0,0.10)');
+      grad.addColorStop(0.92, 'rgba(0,0,0,0.03)');
       grad.addColorStop(1,    'rgba(0,0,0,0)');
       ctx.fillStyle = grad;
       ctx.fillRect(-shadowR * 1.5, -shadowR * 1.5, shadowR * 3.0, shadowR * 3.0);
