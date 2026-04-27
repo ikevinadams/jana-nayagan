@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <title>Jana Nayagan — Last Stand (Prototype)</title>
 <style>
   :root {
@@ -314,6 +317,199 @@
     box-shadow: 0 10px 30px rgba(0,0,0,0.5);
   }
   .results-toast.hidden { display: none; }
+
+  /* ============================================================
+     MOBILE TOUCH CONTROLS
+     Overlay sits on top of the canvas. Hidden by default.
+     <body class="is-touch is-playing"> reveals it.
+     ============================================================ */
+  #touch-controls {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    display: none;
+    z-index: 30;
+    -webkit-user-select: none; user-select: none;
+    -webkit-touch-callout: none;
+    touch-action: none;
+  }
+  body.is-touch.is-playing #touch-controls { display: block; }
+
+  /* --- Left joystick zone (movement) --- */
+  #tc-stick-zone {
+    position: absolute;
+    left: 0; bottom: 0;
+    width: 44vw; height: 60vh;
+    pointer-events: auto;
+    z-index: 1;
+  }
+  #tc-stick-base {
+    position: absolute;
+    width: 140px; height: 140px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 50% 50%, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.04) 60%, rgba(255,255,255,0) 75%);
+    border: 2px solid rgba(255,255,255,0.22);
+    box-shadow: 0 4px 18px rgba(0,0,0,0.5), 0 0 0 1px rgba(0,0,0,0.4) inset;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.12s ease;
+  }
+  #tc-stick-base.active { opacity: 1; }
+  #tc-stick-thumb {
+    position: absolute;
+    width: 64px; height: 64px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, rgba(255,176,46,0.85), rgba(255,90,31,0.95) 70%, rgba(150,40,0,1));
+    border: 2px solid rgba(255,255,255,0.55);
+    box-shadow: 0 6px 20px rgba(255,90,31,0.45), 0 0 0 1px rgba(0,0,0,0.5) inset;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.12s ease;
+  }
+  #tc-stick-thumb.active { opacity: 1; }
+
+  /* --- Right tap-to-aim zone (excludes the buttons) --- */
+  #tc-aim-zone {
+    position: absolute;
+    right: 0; top: 0;
+    width: 56vw; height: 100vh;
+    pointer-events: auto;
+    z-index: 1;
+  }
+
+  /* --- Action buttons (FIRE + JUMP stack, bottom-right) --- */
+  .tc-action-stack {
+    position: absolute;
+    right: 22px; bottom: 22px;
+    display: flex; flex-direction: column;
+    gap: 14px;
+    pointer-events: none;
+    z-index: 5;
+  }
+  .tc-btn {
+    pointer-events: auto;
+    width: 84px; height: 84px;
+    border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.45);
+    color: #fff;
+    font-weight: 900; font-size: 13px; letter-spacing: 1.5px;
+    display: flex; align-items: center; justify-content: center;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.7);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.5), 0 0 0 1px rgba(0,0,0,0.4) inset;
+    -webkit-tap-highlight-color: transparent;
+    transition: transform 0.08s ease, filter 0.08s ease;
+    user-select: none;
+  }
+  .tc-btn.fire {
+    background: radial-gradient(circle at 35% 35%, rgba(255,90,31,0.95), rgba(180,30,10,0.95) 70%, rgba(110,15,0,1));
+    width: 96px; height: 96px;
+    font-size: 14px;
+  }
+  .tc-btn.jump {
+    background: radial-gradient(circle at 35% 35%, rgba(255,210,90,0.95), rgba(255,140,30,0.95) 70%, rgba(170,75,0,1));
+  }
+  .tc-btn.pressed {
+    transform: scale(0.92);
+    filter: brightness(1.25);
+  }
+
+  /* --- Weapon switcher row (top-center) --- */
+  #tc-weapons {
+    position: absolute;
+    top: 12px; left: 50%;
+    transform: translateX(-50%);
+    display: flex; gap: 10px;
+    pointer-events: none;
+    z-index: 5;
+  }
+  .tc-wbtn {
+    pointer-events: auto;
+    min-width: 64px; height: 44px;
+    padding: 0 14px;
+    border-radius: 22px;
+    border: 1.5px solid rgba(255,255,255,0.25);
+    background: rgba(8,10,14,0.62);
+    color: rgba(244,241,234,0.78);
+    font-weight: 800; font-size: 12px; letter-spacing: 2px;
+    display: flex; align-items: center; justify-content: center;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    -webkit-tap-highlight-color: transparent;
+    transition: all 0.12s ease;
+  }
+  .tc-wbtn.active {
+    background: linear-gradient(180deg, rgba(255,176,46,0.90), rgba(255,90,31,0.90));
+    color: #1a1a1a;
+    border-color: rgba(255,255,255,0.55);
+    box-shadow: 0 6px 18px rgba(255,90,31,0.40);
+  }
+  .tc-wbtn.locked {
+    opacity: 0.35;
+    color: rgba(244,241,234,0.45);
+  }
+
+  /* --- Pause button (top-left) --- */
+  #tc-pause {
+    pointer-events: auto;
+    position: absolute;
+    top: 12px; left: 12px;
+    z-index: 5;
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    border: 1.5px solid rgba(255,255,255,0.25);
+    background: rgba(8,10,14,0.62);
+    color: rgba(244,241,234,0.85);
+    display: flex; align-items: center; justify-content: center;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    -webkit-tap-highlight-color: transparent;
+  }
+  #tc-pause::before {
+    content: ""; width: 4px; height: 14px;
+    background: currentColor; box-shadow: 8px 0 currentColor;
+    border-radius: 1px;
+  }
+
+  /* --- Portrait warning (mobile only) --- */
+  #tc-portrait-warn {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(4,6,10,0.96);
+    z-index: 999;
+    align-items: center; justify-content: center;
+    text-align: center;
+    color: var(--ui);
+    flex-direction: column;
+    padding: 30px;
+  }
+  #tc-portrait-warn .icon {
+    width: 68px; height: 110px;
+    border: 3px solid var(--accent);
+    border-radius: 10px;
+    margin-bottom: 22px;
+    position: relative;
+    animation: tc-rot 1.6s ease-in-out infinite;
+  }
+  #tc-portrait-warn .icon::after {
+    content: "";
+    position: absolute;
+    width: 24px; height: 4px;
+    background: var(--accent);
+    border-radius: 2px;
+    bottom: 8px; left: 50%; transform: translateX(-50%);
+  }
+  @keyframes tc-rot {
+    0%, 40% { transform: rotate(0deg); }
+    60%, 100% { transform: rotate(-90deg); }
+  }
+  #tc-portrait-warn h3 { margin: 0 0 8px; font-size: 22px; letter-spacing: 2px; }
+  #tc-portrait-warn p { margin: 0; opacity: 0.75; font-size: 14px; line-height: 1.5; max-width: 320px; }
+  body.is-touch.is-portrait #tc-portrait-warn { display: flex; }
+
+  /* On mobile, scale down the home/over panels and hide desktop keybinds */
+  body.is-touch .home-keybinds.kb-desktop { display: none; }
+  body.is-touch .home-keybinds.kb-mobile { display: block; }
+  .home-keybinds.kb-mobile { display: none; }
 </style>
 </head>
 <body>
@@ -334,7 +530,7 @@
 
       <button id="startBtn" class="btn home-play">PLAY GAME</button>
 
-      <div class="home-keybinds">
+      <div class="home-keybinds kb-desktop">
         <div class="kb-row">
           <span class="kb"><span class="keycap">A</span><span class="keycap">D</span> move</span>
           <span class="kb"><span class="keycap">Space</span> jump</span>
@@ -345,6 +541,14 @@
           <span class="kb dim"><span class="keycap">P</span> pause</span>
           <span class="kb dim"><span class="keycap">R</span> restart</span>
           <span class="kb dim"><span class="keycap">F</span> fullscreen</span>
+        </div>
+      </div>
+      <div class="home-keybinds kb-mobile">
+        <div class="kb-row">
+          <span class="kb"><span class="keycap">Stick</span> move</span>
+          <span class="kb"><span class="keycap">Tap</span> aim &amp; shoot</span>
+          <span class="kb"><span class="keycap">FIRE</span> hold to fire</span>
+          <span class="kb"><span class="keycap">JUMP</span> leap</span>
         </div>
       </div>
     </div>
@@ -406,6 +610,36 @@
         </div>
         <div class="results-toast hidden" id="resultsToast"></div>
       </div>
+    </div>
+
+    <!-- Mobile touch controls (only visible on touch devices in play state) -->
+    <div id="touch-controls">
+      <div id="tc-pause" aria-label="Pause"></div>
+
+      <div id="tc-weapons">
+        <button class="tc-wbtn" data-weapon="1">PISTOL</button>
+        <button class="tc-wbtn locked" data-weapon="2">RIFLE</button>
+        <button class="tc-wbtn locked" data-weapon="3">ROCKET</button>
+      </div>
+
+      <div id="tc-stick-zone">
+        <div id="tc-stick-base"></div>
+        <div id="tc-stick-thumb"></div>
+      </div>
+
+      <div id="tc-aim-zone"></div>
+
+      <div class="tc-action-stack">
+        <button class="tc-btn jump" id="tc-jump">JUMP</button>
+        <button class="tc-btn fire" id="tc-fire">FIRE</button>
+      </div>
+    </div>
+
+    <!-- Portrait warning (forces user to rotate device) -->
+    <div id="tc-portrait-warn">
+      <div class="icon"></div>
+      <h3>ROTATE YOUR DEVICE</h3>
+      <p>Jana Nayagan plays in landscape. Turn your phone sideways to fight.</p>
     </div>
 
     <div class="corner-note">Created by @ikevinadams</div>
@@ -1211,6 +1445,232 @@
     if (e.button === 0) input.shoot = false;
   });
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+  // ------------- Mobile touch controls -------------
+  const isTouchDevice = (
+    'ontouchstart' in window ||
+    (navigator.maxTouchPoints && navigator.maxTouchPoints > 0) ||
+    (window.matchMedia && window.matchMedia('(pointer: coarse)').matches)
+  );
+
+  if (isTouchDevice) {
+    document.body.classList.add('is-touch');
+
+    // --- Joystick state ---
+    const stickZone  = document.getElementById('tc-stick-zone');
+    const stickBase  = document.getElementById('tc-stick-base');
+    const stickThumb = document.getElementById('tc-stick-thumb');
+    const aimZone    = document.getElementById('tc-aim-zone');
+    const fireBtn    = document.getElementById('tc-fire');
+    const jumpBtn    = document.getElementById('tc-jump');
+    const pauseBtn   = document.getElementById('tc-pause');
+    const wpnBtns    = document.querySelectorAll('.tc-wbtn');
+
+    const STICK_RADIUS = 64;       // max thumb travel from center
+    const STICK_DEAD   = 14;       // px deadzone before movement registers
+    const STICK_DOWN_T = 0.55;     // sin(angle) threshold for "down" aim
+    let stickTouchId = null;
+    let stickOriginX = 0, stickOriginY = 0;
+
+    function setStickVisual(originX, originY, dx, dy, active) {
+      if (active) {
+        stickBase.style.left  = (originX - 70) + 'px';
+        stickBase.style.top   = (originY - 70) + 'px';
+        stickThumb.style.left = (originX - 32 + dx) + 'px';
+        stickThumb.style.top  = (originY - 32 + dy) + 'px';
+        stickBase.classList.add('active');
+        stickThumb.classList.add('active');
+      } else {
+        stickBase.classList.remove('active');
+        stickThumb.classList.remove('active');
+      }
+    }
+
+    function updateStick(touch) {
+      const rect = stickZone.getBoundingClientRect();
+      let dx = touch.clientX - stickOriginX;
+      let dy = touch.clientY - stickOriginY;
+      const dist = Math.hypot(dx, dy);
+      if (dist > STICK_RADIUS) {
+        dx = dx * STICK_RADIUS / dist;
+        dy = dy * STICK_RADIUS / dist;
+      }
+      // Translate to game input
+      const mag = Math.hypot(dx, dy);
+      if (mag < STICK_DEAD) {
+        input.left = false; input.right = false;
+        input.down = false;
+      } else {
+        input.left  = dx < -STICK_DEAD * 0.7;
+        input.right = dx >  STICK_DEAD * 0.7;
+        // crouch / aim-down when stick is pushed down hard
+        input.down  = (dy / Math.max(1, mag)) > STICK_DOWN_T;
+      }
+      setStickVisual(stickOriginX, stickOriginY, dx, dy, true);
+    }
+
+    function endStick() {
+      stickTouchId = null;
+      input.left = false; input.right = false; input.down = false;
+      setStickVisual(0, 0, 0, 0, false);
+    }
+
+    stickZone.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      if (stickTouchId !== null) return;
+      const t = e.changedTouches[0];
+      stickTouchId = t.identifier;
+      stickOriginX = t.clientX;
+      stickOriginY = t.clientY;
+      updateStick(t);
+    }, { passive: false });
+
+    stickZone.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      for (const t of e.changedTouches) {
+        if (t.identifier === stickTouchId) { updateStick(t); break; }
+      }
+    }, { passive: false });
+
+    function onStickEnd(e) {
+      for (const t of e.changedTouches) {
+        if (t.identifier === stickTouchId) { endStick(); break; }
+      }
+    }
+    stickZone.addEventListener('touchend',    onStickEnd);
+    stickZone.addEventListener('touchcancel', onStickEnd);
+
+    // --- Tap-to-aim/shoot zone ---
+    // A tap on the right zone (away from buttons) sets the aim point in
+    // canvas coords AND triggers a one-shot fire pulse. Dragging updates
+    // the aim point continuously and keeps fire = true while held.
+    let aimTouchId = null;
+
+    function setAimFromTouch(touch) {
+      const r = canvas.getBoundingClientRect();
+      input.mouseX = (touch.clientX - r.left);
+      input.mouseY = (touch.clientY - r.top);
+    }
+
+    aimZone.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      if (aimTouchId !== null) return;
+      const t = e.changedTouches[0];
+      aimTouchId = t.identifier;
+      setAimFromTouch(t);
+      input.shoot = true;
+      input.shootPressed = true;
+    }, { passive: false });
+
+    aimZone.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      for (const t of e.changedTouches) {
+        if (t.identifier === aimTouchId) { setAimFromTouch(t); break; }
+      }
+    }, { passive: false });
+
+    function onAimEnd(e) {
+      for (const t of e.changedTouches) {
+        if (t.identifier === aimTouchId) {
+          aimTouchId = null;
+          // Only stop firing if FIRE button isn't also held
+          if (!fireBtnHeld) input.shoot = false;
+          break;
+        }
+      }
+    }
+    aimZone.addEventListener('touchend',    onAimEnd);
+    aimZone.addEventListener('touchcancel', onAimEnd);
+
+    // --- FIRE button ---
+    // Held = continuous fire. Aim direction is whatever was last set by the
+    // tap-aim zone, OR if nothing tapped yet, project a point in front of
+    // the player's facing direction.
+    let fireBtnHeld = false;
+    function pressFire(e) {
+      e.preventDefault();
+      fireBtnHeld = true;
+      fireBtn.classList.add('pressed');
+      // If no aim has been set yet (or aim is stale), project in facing dir
+      if (input.mouseX === 0 && input.mouseY === 0) {
+        const r = canvas.getBoundingClientRect();
+        const facing = (typeof player !== 'undefined') ? (player.facing || 1) : 1;
+        input.mouseX = r.width * 0.5 + facing * 200;
+        input.mouseY = r.height * 0.55;
+      }
+      input.shoot = true;
+      input.shootPressed = true;
+    }
+    function releaseFire(e) {
+      e.preventDefault();
+      fireBtnHeld = false;
+      fireBtn.classList.remove('pressed');
+      if (aimTouchId === null) input.shoot = false;
+    }
+    fireBtn.addEventListener('touchstart',  pressFire,   { passive: false });
+    fireBtn.addEventListener('touchend',    releaseFire, { passive: false });
+    fireBtn.addEventListener('touchcancel', releaseFire, { passive: false });
+
+    // --- JUMP button ---
+    function pressJump(e) {
+      e.preventDefault();
+      jumpBtn.classList.add('pressed');
+      if (!input.up) input.jumpPressed = true;
+      input.up = true;
+    }
+    function releaseJump(e) {
+      e.preventDefault();
+      jumpBtn.classList.remove('pressed');
+      input.up = false;
+      input.jumpReleased = true;
+    }
+    jumpBtn.addEventListener('touchstart',  pressJump,   { passive: false });
+    jumpBtn.addEventListener('touchend',    releaseJump, { passive: false });
+    jumpBtn.addEventListener('touchcancel', releaseJump, { passive: false });
+
+    // --- Weapon switcher ---
+    wpnBtns.forEach(btn => {
+      btn.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        const n = parseInt(btn.dataset.weapon, 10);
+        if (n) input.switch = n;
+      }, { passive: false });
+    });
+
+    // --- Pause ---
+    pauseBtn.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      togglePause();
+    }, { passive: false });
+
+    // --- Orientation watch ---
+    function checkOrientation() {
+      const portrait = window.matchMedia('(orientation: portrait)').matches;
+      document.body.classList.toggle('is-portrait', portrait);
+    }
+    window.addEventListener('resize', checkOrientation);
+    window.addEventListener('orientationchange', checkOrientation);
+    checkOrientation();
+
+    // --- Suppress page-level gestures while playing ---
+    document.addEventListener('touchmove', (e) => {
+      if (document.body.classList.contains('is-playing')) e.preventDefault();
+    }, { passive: false });
+
+    // Expose a hook for the weapon UI to refresh active/locked state
+    window.refreshTouchWeapons = function() {
+      if (typeof game === 'undefined' || typeof player === 'undefined') return;
+      const map = { 1:'pistol', 2:'smg', 3:'rocket' };
+      wpnBtns.forEach(btn => {
+        const n = parseInt(btn.dataset.weapon, 10);
+        const wkey = map[n];
+        if (!wkey) return;
+        const unlocked = game.weaponsUnlocked && game.weaponsUnlocked[wkey];
+        btn.classList.toggle('locked', !unlocked);
+        btn.classList.toggle('active', player.currentWeapon === wkey);
+      });
+    };
+  }
 
   function toggleFullscreen() {
     if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
@@ -3500,6 +3960,8 @@
 
   // ------------- Main loop -------------
   let last = performance.now();
+  let _lastBodyState = '';
+  let _wpnUiTimer = 0;
   function frame(now) {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
@@ -3512,6 +3974,18 @@
       // game world.
     } else {
       render();
+    }
+    // Sync body class so #touch-controls reveals only during 'play'
+    if (game.state !== _lastBodyState) {
+      _lastBodyState = game.state;
+      document.body.classList.toggle('is-playing', game.state === 'play');
+      if (window.refreshTouchWeapons) window.refreshTouchWeapons();
+    }
+    // Refresh weapon UI lazily (every ~200ms) so unlocks/active weapon update
+    _wpnUiTimer += dt;
+    if (_wpnUiTimer >= 0.2) {
+      _wpnUiTimer = 0;
+      if (window.refreshTouchWeapons) window.refreshTouchWeapons();
     }
     requestAnimationFrame(frame);
   }
