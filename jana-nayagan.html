@@ -1432,7 +1432,7 @@
   // Draw a sprite scaled so its height matches `targetH`, centered horizontally
   // at `cx`, sitting on the ground at `groundY` (bottom of sprite). If `flip`
   // is true the sprite is mirrored horizontally.
-  function drawSpriteOnGround(sprite, cx, groundY, targetH, flip) {
+  function drawSpriteOnGround(sprite, cx, groundY, targetH, flip, tint) {
     if (!sprite) return false;
     const sw = sprite.naturalWidth  || sprite.width;
     const sh = sprite.naturalHeight || sprite.height;
@@ -1444,7 +1444,19 @@
       ctx.scale(-1, 1);
       ctx.translate(-cx, 0);
     }
-    ctx.drawImage(sprite, cx - w/2, groundY - h, w, h);
+    const dx = cx - w/2, dy = groundY - h;
+    ctx.drawImage(sprite, dx, dy, w, h);
+    // Optional color overlay — `source-atop` paints only where the sprite has
+    // alpha, so the tint perfectly hugs the silhouette instead of being a flat
+    // rectangle. Used for damage flashes (red) and could be reused for FX.
+    if (tint && tint.alpha > 0) {
+      ctx.globalCompositeOperation = 'source-atop';
+      ctx.globalAlpha = tint.alpha;
+      ctx.fillStyle = tint.color;
+      ctx.fillRect(dx, dy, w, h);
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = 'source-over';
+    }
     ctx.restore();
     return true;
   }
@@ -2358,8 +2370,17 @@
   function updateEnemies(dt) {
     const cullLeft = game.cameraX - 240;
     const cullRight = game.cameraX + W + 600;
+    // Pre-30-kills, bots that have been outrun and are now to the LEFT of
+    // the player despawn — keeps the action focused in front of the player
+    // and prevents off-screen-left gunfire while the user is still learning.
+    // Boss is always exempt (he's a scripted encounter).
+    const earlyGameLeftCull = (game.kills < 30) ? (player.x - 60) : null;
     for (let i=enemies.length-1;i>=0;i--) {
       const e = enemies[i];
+      if (earlyGameLeftCull !== null && e.kind !== 'boss' && !e.dying && e.x + e.w < earlyGameLeftCull) {
+        enemies.splice(i,1);
+        continue;
+      }
       // dying bots play out their death animation in place, then despawn
       if (e.dying) {
         e.deathT += dt;
@@ -3028,8 +3049,13 @@
                   : isJump    ? CFG.playerSpriteH * 0.86
                   : isHurt    ? CFG.playerSpriteH * 0.90
                   : CFG.playerSpriteH;
+    // Damage tint — paints red onto the sprite silhouette only when the
+    // hero just took a hit. Smoothly fades back as the hitFlash decays.
+    const heroTint = (p.hitFlash > 0)
+      ? { color: '#ff1a1a', alpha: Math.min(0.65, (p.hitFlash / 0.25) * 0.65) }
+      : null;
     const drewSprite = drawSpriteOnGround(
-      chosen, cx, spriteBottom, targetH, p.facing < 0
+      chosen, cx, spriteBottom, targetH, p.facing < 0, heroTint
     );
     if (!drewSprite) {
       drawHeroPlaceholder(p, fx, fy, cx, cy, bob);
@@ -3059,13 +3085,8 @@
       }
     }
 
-    // hit flash overlay
-    if (p.hitFlash > 0) {
-      ctx.globalAlpha = p.hitFlash / 0.25 * 0.7;
-      ctx.fillStyle = '#ff5a1f';
-      ctx.fillRect(fx-4, fy-4, p.w+8, p.h+8);
-      ctx.globalAlpha = 1;
-    }
+    // (Hit flash is now drawn as a sprite-shaped red tint inside
+    // drawSpriteOnGround above — no rectangular overlay needed.)
   }
 
   function drawHeroPlaceholder(p, fx, fy, cx, cy, bob) {
@@ -3295,7 +3316,6 @@
 
     const spr = sprites[key] || sprites.bot_gunner_idle;
     if (spr) {
-      if (e.hitFlash > 0) ctx.filter = 'brightness(2.4)';
       // Subtle vertical wobble while walking — makes the gait feel alive.
       const wobble = moving ? Math.abs(Math.sin(e.walkPhase * 2)) * 3.5 : 0;
       const feetY = e.y + e.h + 8 - wobble;
@@ -3305,8 +3325,12 @@
       const frameFlip = BOT_FRAME_FLIP[key] || false;
       const baseFlip  = e.facing > 0;
       const finalFlip = baseFlip !== frameFlip;     // XOR
-      drawSpriteOnGround(spr, cx, feetY, targetH, finalFlip);
-      ctx.filter = 'none';
+      // Damage tint — fills the sprite alpha with red on hit. Replaces the
+      // previous brightness-flash filter which washed out the silhouette.
+      const enemyTint = (e.hitFlash > 0)
+        ? { color: '#ff1a1a', alpha: Math.min(0.75, (e.hitFlash / 0.12) * 0.75) }
+        : null;
+      drawSpriteOnGround(spr, cx, feetY, targetH, finalFlip, enemyTint);
     } else {
       drawBotPlaceholder(e);
     }
