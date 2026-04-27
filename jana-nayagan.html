@@ -400,11 +400,6 @@
     transition: transform 0.08s ease, filter 0.08s ease;
     user-select: none;
   }
-  .tc-btn.fire {
-    background: radial-gradient(circle at 35% 35%, rgba(255,90,31,0.95), rgba(180,30,10,0.95) 70%, rgba(110,15,0,1));
-    width: 96px; height: 96px;
-    font-size: 14px;
-  }
   .tc-btn.jump {
     background: radial-gradient(circle at 35% 35%, rgba(255,210,90,0.95), rgba(255,140,30,0.95) 70%, rgba(170,75,0,1));
   }
@@ -416,21 +411,21 @@
   /* --- Weapon switcher row (top-center) --- */
   #tc-weapons {
     position: absolute;
-    top: 12px; left: 50%;
+    top: 8px; left: 50%;
     transform: translateX(-50%);
-    display: flex; gap: 10px;
+    display: flex; gap: 6px;
     pointer-events: none;
     z-index: 5;
   }
   .tc-wbtn {
     pointer-events: auto;
-    min-width: 64px; height: 44px;
-    padding: 0 14px;
-    border-radius: 22px;
-    border: 1.5px solid rgba(255,255,255,0.25);
-    background: rgba(8,10,14,0.62);
-    color: rgba(244,241,234,0.78);
-    font-weight: 800; font-size: 12px; letter-spacing: 2px;
+    min-width: 36px; height: 28px;
+    padding: 0 9px;
+    border-radius: 14px;
+    border: 1px solid rgba(255,255,255,0.20);
+    background: rgba(8,10,14,0.55);
+    color: rgba(244,241,234,0.72);
+    font-weight: 800; font-size: 10px; letter-spacing: 1.5px;
     display: flex; align-items: center; justify-content: center;
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
@@ -441,11 +436,11 @@
     background: linear-gradient(180deg, rgba(255,176,46,0.90), rgba(255,90,31,0.90));
     color: #1a1a1a;
     border-color: rgba(255,255,255,0.55);
-    box-shadow: 0 6px 18px rgba(255,90,31,0.40);
+    box-shadow: 0 4px 12px rgba(255,90,31,0.35);
   }
   .tc-wbtn.locked {
-    opacity: 0.35;
-    color: rgba(244,241,234,0.45);
+    opacity: 0.30;
+    color: rgba(244,241,234,0.40);
   }
 
   /* --- Pause button (top-left) --- */
@@ -546,9 +541,11 @@
       <div class="home-keybinds kb-mobile">
         <div class="kb-row">
           <span class="kb"><span class="keycap">Stick</span> move</span>
-          <span class="kb"><span class="keycap">Tap</span> aim &amp; shoot</span>
-          <span class="kb"><span class="keycap">FIRE</span> hold to fire</span>
+          <span class="kb"><span class="keycap">Tap</span> shoot</span>
           <span class="kb"><span class="keycap">JUMP</span> leap</span>
+        </div>
+        <div class="kb-row ios-hint" id="iosHomeHint" style="display:none; margin-top: 8px; opacity: 0.55; font-size: 11px;">
+          Tip: tap <b>Share</b> &rarr; <b>Add to Home Screen</b> for full-screen play
         </div>
       </div>
     </div>
@@ -619,7 +616,7 @@
       <div id="tc-weapons">
         <button class="tc-wbtn" data-weapon="1">PISTOL</button>
         <button class="tc-wbtn locked" data-weapon="2">RIFLE</button>
-        <button class="tc-wbtn locked" data-weapon="3">ROCKET</button>
+        <button class="tc-wbtn locked" data-weapon="3">RPG</button>
       </div>
 
       <div id="tc-stick-zone">
@@ -631,7 +628,6 @@
 
       <div class="tc-action-stack">
         <button class="tc-btn jump" id="tc-jump">JUMP</button>
-        <button class="tc-btn fire" id="tc-fire">FIRE</button>
       </div>
     </div>
 
@@ -1456,12 +1452,23 @@
   if (isTouchDevice) {
     document.body.classList.add('is-touch');
 
+    // iOS Safari can't use the Fullscreen API on regular elements. Show a
+    // subtle Add-to-Home-Screen hint on the start screen so users can launch
+    // the game in standalone mode (full-screen, no chrome).
+    const isIOSSafari = /iPad|iPhone|iPod/.test(navigator.userAgent) &&
+                        !window.MSStream &&
+                        !window.matchMedia('(display-mode: standalone)').matches &&
+                        !navigator.standalone;
+    if (isIOSSafari) {
+      const hint = document.getElementById('iosHomeHint');
+      if (hint) hint.style.display = 'block';
+    }
+
     // --- Joystick state ---
     const stickZone  = document.getElementById('tc-stick-zone');
     const stickBase  = document.getElementById('tc-stick-base');
     const stickThumb = document.getElementById('tc-stick-thumb');
     const aimZone    = document.getElementById('tc-aim-zone');
-    const fireBtn    = document.getElementById('tc-fire');
     const jumpBtn    = document.getElementById('tc-jump');
     const pauseBtn   = document.getElementById('tc-pause');
     const wpnBtns    = document.querySelectorAll('.tc-wbtn');
@@ -1573,43 +1580,13 @@
       for (const t of e.changedTouches) {
         if (t.identifier === aimTouchId) {
           aimTouchId = null;
-          // Only stop firing if FIRE button isn't also held
-          if (!fireBtnHeld) input.shoot = false;
+          input.shoot = false;
           break;
         }
       }
     }
     aimZone.addEventListener('touchend',    onAimEnd);
     aimZone.addEventListener('touchcancel', onAimEnd);
-
-    // --- FIRE button ---
-    // Held = continuous fire. Aim direction is whatever was last set by the
-    // tap-aim zone, OR if nothing tapped yet, project a point in front of
-    // the player's facing direction.
-    let fireBtnHeld = false;
-    function pressFire(e) {
-      e.preventDefault();
-      fireBtnHeld = true;
-      fireBtn.classList.add('pressed');
-      // If no aim has been set yet (or aim is stale), project in facing dir
-      if (input.mouseX === 0 && input.mouseY === 0) {
-        const r = canvas.getBoundingClientRect();
-        const facing = (typeof player !== 'undefined') ? (player.facing || 1) : 1;
-        input.mouseX = r.width * 0.5 + facing * 200;
-        input.mouseY = r.height * 0.55;
-      }
-      input.shoot = true;
-      input.shootPressed = true;
-    }
-    function releaseFire(e) {
-      e.preventDefault();
-      fireBtnHeld = false;
-      fireBtn.classList.remove('pressed');
-      if (aimTouchId === null) input.shoot = false;
-    }
-    fireBtn.addEventListener('touchstart',  pressFire,   { passive: false });
-    fireBtn.addEventListener('touchend',    releaseFire, { passive: false });
-    fireBtn.addEventListener('touchcancel', releaseFire, { passive: false });
 
     // --- JUMP button ---
     function pressJump(e) {
@@ -3783,8 +3760,25 @@
   }
 
   // wire up buttons
-  document.getElementById('startBtn').addEventListener('click', startGame);
-  document.getElementById('retryBtn').addEventListener('click', startGame);
+  function enterImmersiveMode() {
+    // Request fullscreen (works on Android Chrome / Samsung Internet / Firefox)
+    const el = document.documentElement;
+    const req = el.requestFullscreen || el.webkitRequestFullscreen ||
+                el.mozRequestFullScreen || el.msRequestFullscreen;
+    if (req) { try { req.call(el); } catch(e) {} }
+    // Try to lock landscape orientation (works while in fullscreen)
+    if (screen.orientation && screen.orientation.lock) {
+      screen.orientation.lock('landscape').catch(() => {});
+    }
+    // iOS Safari trick: a tiny scroll dismisses the URL bar
+    setTimeout(() => { window.scrollTo(0, 1); }, 100);
+  }
+  function startGameWithFullscreen() {
+    enterImmersiveMode();
+    startGame();
+  }
+  document.getElementById('startBtn').addEventListener('click', startGameWithFullscreen);
+  document.getElementById('retryBtn').addEventListener('click', startGameWithFullscreen);
   document.getElementById('resumeBtn').addEventListener('click', togglePause);
   document.getElementById('continueBtn').addEventListener('click', continueRun);
   document.getElementById('finishBtn').addEventListener('click', finishRun);
