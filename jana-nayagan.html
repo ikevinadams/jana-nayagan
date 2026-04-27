@@ -1181,7 +1181,10 @@
   // walkable surface actually starts, and emitter flags for smoke/sparks.
   const OBSTACLE_DEFS = {
     concrete_wall: {
-      variants: ['obstacle_concrete_wall','obstacle_concrete_wall_b','obstacle_concrete_wall_c'],
+      // Original obstacle_concrete_wall.png had a baked-in green/gold floor
+      // halo at the bottom that wouldn't blend cleanly — dropped from the
+      // pool. _b and _c are clean and work well together.
+      variants: ['obstacle_concrete_wall_b','obstacle_concrete_wall_c'],
       spriteH: 200, hitW: 280, topInset: 0.18, isPlatform: true,
       weight: 14,
     },
@@ -1196,13 +1199,13 @@
     },
     rubble_pile: {
       variants: ['obstacle_rubble_pile'],
-      spriteH: 160, hitW: 320, topInset: 0.20, isPlatform: true,
+      // Bumped from 160→200 so the debris reads bigger and more present.
+      spriteH: 200, hitW: 360, topInset: 0.20, isPlatform: true,
       weight: 12,
-      // Crushes the bright concrete asset darker, but with the toe lifted
-      // slightly (lower contrast) so blacks aren't pure-crushed — keeps the
-      // subtle haze treatment consistent with the other obstacles.
-      filter: 'brightness(0.65) contrast(1.10) saturate(0.88)',
-      yOffset: 18,
+      // Knocked brightness down a hair more so the pile sits darker against
+      // the floor — was still reading too bright in playtest.
+      filter: 'brightness(0.55) contrast(1.06) saturate(0.85)',
+      yOffset: 22,
     },
     cargo_crates: {
       variants: ['obstacle_cargo_crates','obstacle_cargo_crates_b','obstacle_cargo_crates_c'],
@@ -1214,17 +1217,20 @@
         { x0: 0.56, x1: 1.00, topInsetFrac: 0.42 },   // exposed lower container (lower)
       ],
       weight: 8,
+      // Containers were rendering too bright + teal-tinted, popping out of
+      // the dark scene. Crush brightness, ease saturation, lift toe so the
+      // metal blends naturally with the rest of the world.
+      filter: 'brightness(0.62) contrast(1.06) saturate(0.78)',
     },
     burning_wreck: {
-      // Sprite is rendered at 2.5× original height (600px). topInset bumped
-      // to 0.82 so the actual solid blocking hitbox (bottom 18% of sprite =
-      // ~108px) remains the same physical size as before — keeps the wreck
-      // clearable in one jump while reading much more imposing on screen.
+      // 2× original height (480). topInset 0.78 keeps the solid blocking
+      // hitbox (bottom 22% of sprite ≈ 105px) the same physical size as
+      // before — wreck reads imposing but still single-jump clearable.
       variants: ['obstacle_burning_wreck','obstacle_burning_wreck_b','obstacle_burning_wreck_c'],
-      spriteH: 600, hitW: 240, topInset: 0.82, isPlatform: false,
+      spriteH: 480, hitW: 240, topInset: 0.78, isPlatform: false,
       smoke: true, smokeAtY: 0.35,
       weight: 10,
-      yOffset: 30,
+      yOffset: 24,
     },
     robot_pile: {
       variants: ['obstacle_robot_pile','obstacle_robot_pile_b'],
