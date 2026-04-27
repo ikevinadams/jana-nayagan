@@ -864,6 +864,9 @@
     obstacle_burning_wreck: null,    obstacle_burning_wreck_b: null,    obstacle_burning_wreck_c: null,
     obstacle_robot_pile: null,       obstacle_robot_pile_b: null,
     obstacle_sparking_cables: null,
+    obstacle_sandbag_wall: null,
+    obstacle_jersey_barrier: null,
+    obstacle_collapsed_billboard: null,
     obstacle_oil_drums: null,        obstacle_oil_drums_b: null,
     // Boss villain
     boss_idle:   null,
@@ -1241,6 +1244,43 @@
     // (sparking_cables removed — visually too noisy; played as a floating
     // mess of wires that didn't sit naturally on the ground.)
     // (oil_drums def deleted — no longer spawns or renders anywhere.)
+
+    // --- New obstacles (Apr 27 batch) — proportionate to hero spriteH 240 ---
+    sandbag_wall: {
+      // Pyramid stack of sandbags + small ammo crate at base. Reads as
+      // chest-high cover (~70% of hero height). Pyramid top is narrow but
+      // there IS a flat-ish top — platform behavior.
+      variants: ['obstacle_sandbag_wall'],
+      spriteH: 170, hitW: 220, topInset: 0.20, isPlatform: true,
+      weight: 9,
+      // Earth-tone burlap is naturally low-saturation; default haze filter
+      // works well, just a hair more contrast crush to match the world.
+      filter: 'brightness(0.84) contrast(1.06) saturate(0.92)',
+      yOffset: 16,
+    },
+    jersey_barrier: {
+      // Two stacked concrete traffic barriers. Hip-to-shoulder height for
+      // the player (~65% hero height). Flat top — clean platform.
+      variants: ['obstacle_jersey_barrier'],
+      spriteH: 160, hitW: 200, topInset: 0.10, isPlatform: true,
+      weight: 9,
+      // Concrete + yellow stripe wants slightly lower brightness so the
+      // bright stripe doesn't pop out of the dark scene.
+      filter: 'brightness(0.74) contrast(1.05) saturate(0.82)',
+      yOffset: 16,
+    },
+    collapsed_billboard: {
+      // Toppled billboard with twisted scaffold. Wide and low, waist-high
+      // at peak (~55% hero height). Top is irregular but the player can
+      // step across it — platform behavior with a moderate topInset.
+      variants: ['obstacle_collapsed_billboard'],
+      spriteH: 145, hitW: 240, topInset: 0.22, isPlatform: true,
+      weight: 9,
+      // The torn paper face is a bit warm/orange — pull saturation down
+      // and crush brightness so it sits with the rest of the props.
+      filter: 'brightness(0.76) contrast(1.05) saturate(0.85)',
+      yOffset: 18,
+    },
   };
 
   let obstacles = [];
