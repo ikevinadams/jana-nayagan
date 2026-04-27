@@ -1189,20 +1189,19 @@
       variants: ['obstacle_pillar_debris'],
       spriteH: 220, hitW: 150, topInset: 0.10, isPlatform: true,
       weight: 8,
-      // Light concrete reads too bright against the dark world and looks
-      // floaty. Crush brightness + sink slightly into the floor so the
-      // rubble base reads as resting on the ground.
-      filter: 'brightness(0.62) contrast(1.22) saturate(0.88)',
+      // Concrete asset crushed darker + toe lifted (lower contrast) so the
+      // shadows aren't pure-black — adds the same subtle haze as the rest.
+      filter: 'brightness(0.72) contrast(1.05) saturate(0.90)',
       yOffset: 14,
     },
     rubble_pile: {
       variants: ['obstacle_rubble_pile'],
       spriteH: 160, hitW: 320, topInset: 0.20, isPlatform: true,
       weight: 12,
-      // Visually this asset reads too bright + floaty against the dark world.
-      // Crush it with a darker filter and let the bottom edge bleed below the
-      // ground line so the pile reads as resting on the floor, not hovering.
-      filter: 'brightness(0.55) contrast(1.32) saturate(0.85)',
+      // Crushes the bright concrete asset darker, but with the toe lifted
+      // slightly (lower contrast) so blacks aren't pure-crushed — keeps the
+      // subtle haze treatment consistent with the other obstacles.
+      filter: 'brightness(0.65) contrast(1.10) saturate(0.88)',
       yOffset: 18,
     },
     cargo_crates: {
@@ -1217,15 +1216,15 @@
       weight: 8,
     },
     burning_wreck: {
-      // Sprite is rendered at 2× original height so the car reads big and
-      // imposing on screen, but topInset is bumped to 0.78 so the actual
-      // solid blocking hitbox (bottom 22% of sprite) is the same physical
-      // size as before — keeps the obstacle jumpable with one hop.
+      // Sprite is rendered at 2.5× original height (600px). topInset bumped
+      // to 0.82 so the actual solid blocking hitbox (bottom 18% of sprite =
+      // ~108px) remains the same physical size as before — keeps the wreck
+      // clearable in one jump while reading much more imposing on screen.
       variants: ['obstacle_burning_wreck','obstacle_burning_wreck_b','obstacle_burning_wreck_c'],
-      spriteH: 480, hitW: 240, topInset: 0.78, isPlatform: false,
+      spriteH: 600, hitW: 240, topInset: 0.82, isPlatform: false,
       smoke: true, smokeAtY: 0.35,
       weight: 10,
-      yOffset: 24,
+      yOffset: 30,
     },
     robot_pile: {
       variants: ['obstacle_robot_pile','obstacle_robot_pile_b'],
@@ -1395,7 +1394,11 @@
       // Per-obstacle overrides (def.filter / def.yOffset) let individual props
       // be tuned darker or sunk below the ground line without touching others.
       ctx.save();
-      ctx.filter = o.def.filter || 'brightness(0.78) contrast(1.18) saturate(0.92)';
+      // Default filter: lifts the deepest blacks slightly toward gray (like
+      // pulling up the curves toe in Photoshop) so the obstacle reads with
+      // a subtle atmospheric haze instead of crushed pure-black shadows.
+      // Brightness up a hair, contrast eased back, saturation slightly up.
+      ctx.filter = o.def.filter || 'brightness(0.86) contrast(1.04) saturate(0.94)';
       // Default 14px sink — every obstacle bleeds slightly below the ground
       // line so the bottom edge feathers into the floor instead of cutting
       // off in mid-air. Per-obstacle overrides (def.yOffset) take priority.
@@ -1437,31 +1440,62 @@
   // Draw a sprite scaled so its height matches `targetH`, centered horizontally
   // at `cx`, sitting on the ground at `groundY` (bottom of sprite). If `flip`
   // is true the sprite is mirrored horizontally.
+  // Reusable offscreen canvas for sprite-shaped color tints. We can't simply
+  // run `source-atop` against the main canvas because that mode paints over
+  // EVERY opaque pixel in the bounding box (including the floor, parallax,
+  // other obstacles drawn before the sprite) — which manifests as a red
+  // rectangle around the character. So we render the sprite + tint into a
+  // small isolated canvas first, then blit that result back to the main one.
+  const _tintCanvas = document.createElement('canvas');
+  const _tintCtx    = _tintCanvas.getContext('2d');
+
   function drawSpriteOnGround(sprite, cx, groundY, targetH, flip, tint) {
     if (!sprite) return false;
     const sw = sprite.naturalWidth  || sprite.width;
     const sh = sprite.naturalHeight || sprite.height;
     const scale = targetH / sh;
     const w = sw * scale, h = targetH;
+    const dx = cx - w/2, dy = groundY - h;
+
+    // Fast path — no tint, just stamp the sprite onto the main canvas.
+    if (!tint || tint.alpha <= 0) {
+      ctx.save();
+      if (flip) {
+        ctx.translate(cx, 0);
+        ctx.scale(-1, 1);
+        ctx.translate(-cx, 0);
+      }
+      ctx.drawImage(sprite, dx, dy, w, h);
+      ctx.restore();
+      return true;
+    }
+
+    // Tinted path — render the sprite into the offscreen canvas, apply the
+    // color overlay clipped to the sprite alpha (source-atop here is safe
+    // because the only thing painted is the sprite itself), then composite
+    // the result onto the main canvas. Flip is handled at the final blit.
+    const iw = Math.max(1, Math.ceil(w));
+    const ih = Math.max(1, Math.ceil(h));
+    if (_tintCanvas.width  < iw) _tintCanvas.width  = iw;
+    if (_tintCanvas.height < ih) _tintCanvas.height = ih;
+    _tintCtx.clearRect(0, 0, _tintCanvas.width, _tintCanvas.height);
+    _tintCtx.drawImage(sprite, 0, 0, iw, ih);
+    _tintCtx.globalCompositeOperation = 'source-atop';
+    _tintCtx.globalAlpha = tint.alpha;
+    _tintCtx.fillStyle = tint.color;
+    _tintCtx.fillRect(0, 0, iw, ih);
+    _tintCtx.globalAlpha = 1;
+    _tintCtx.globalCompositeOperation = 'source-over';
+
     ctx.save();
     if (flip) {
       ctx.translate(cx, 0);
       ctx.scale(-1, 1);
       ctx.translate(-cx, 0);
     }
-    const dx = cx - w/2, dy = groundY - h;
-    ctx.drawImage(sprite, dx, dy, w, h);
-    // Optional color overlay — `source-atop` paints only where the sprite has
-    // alpha, so the tint perfectly hugs the silhouette instead of being a flat
-    // rectangle. Used for damage flashes (red) and could be reused for FX.
-    if (tint && tint.alpha > 0) {
-      ctx.globalCompositeOperation = 'source-atop';
-      ctx.globalAlpha = tint.alpha;
-      ctx.fillStyle = tint.color;
-      ctx.fillRect(dx, dy, w, h);
-      ctx.globalAlpha = 1;
-      ctx.globalCompositeOperation = 'source-over';
-    }
+    // Source rect = (0,0,iw,ih), dest rect = (dx,dy,w,h). The slight
+    // sub-pixel rounding (iw,ih are ceiled) is invisible at these scales.
+    ctx.drawImage(_tintCanvas, 0, 0, iw, ih, dx, dy, w, h);
     ctx.restore();
     return true;
   }
