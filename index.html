@@ -2705,12 +2705,10 @@
     ctx.fillStyle = glow;
     ctx.fillRect(0,0,W,H);
 
-    // Far parallax — full-height tile that covers sky AND the lower building
-    // band that fades into the floor. fadeEdges was the real source of those
-    // faint vertical lines on the ground (each tile seam painted a dark
-    // gradient band from y=0 to y=floor); mirror alone hides the seams now.
+    // Far parallax — stretched tall, alternating flip + soft edge fade hides
+    // the seam between repeating tiles for an endless-skyline effect.
     if (sprites.bg_far) {
-      drawParallaxLayer(sprites.bg_far, 0.18, 0, H * 0.95, { mirror: true });
+      drawParallaxLayer(sprites.bg_far, 0.18, 0, H * 0.95, { mirror: true, fadeEdges: true });
     } else {
       drawSkyline(0.15, '#0c0f15', H*0.62, 90);
       drawSkyline(0.30, '#13161e', H*0.66, 70);
