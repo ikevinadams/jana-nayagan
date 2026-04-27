@@ -1278,9 +1278,10 @@
       variants: ['obstacle_sandbag_wall'],
       spriteH: 170, hitW: 220, topInset: 0.20, isPlatform: true,
       weight: 9,
-      // Brightness pulled further down + contrast bumped so the warm-tone
-      // burlap doesn't read brighter than the rest of the world.
-      filter: 'brightness(0.70) contrast(1.18) saturate(0.86)',
+      // Brightness crushed harder so the warm-tone burlap sinks into the
+      // dark scene. The bags were the brightest object in any frame —
+      // dropping to 0.55 puts them on level with the rest of the props.
+      filter: 'brightness(0.55) contrast(1.16) saturate(0.82)',
       yOffset: 24,
     },
     jersey_barrier: {
