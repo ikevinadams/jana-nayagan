@@ -872,6 +872,9 @@
     obstacle_sandbag_wall: null,
     obstacle_jersey_barrier: null,
     obstacle_collapsed_billboard: null,
+    weapon_icon_pistol: null,
+    weapon_icon_rifle:  null,
+    weapon_icon_rocket: null,
     obstacle_oil_drums: null,        obstacle_oil_drums_b: null,
     // Boss villain
     boss_idle:   null,
@@ -3910,11 +3913,25 @@
       const cAmmo = game.ammo[id];
       ctx.fillText(cAmmo === Infinity ? '∞' : cAmmo, x + 38, sy + 28);
       ctx.textAlign = 'left';
-      // mini weapon icon
-      ctx.save();
-      ctx.translate(x+22, sy+18);
-      drawGunPlaceholder(id);
-      ctx.restore();
+      // mini weapon icon — use the cropped hero-sprite icon if loaded,
+      // otherwise fall back to the procedural placeholder.
+      const iconKey = 'weapon_icon_' + (id === 'smg' ? 'rifle' : id);
+      const iconImg = sprites[iconKey];
+      if (iconImg) {
+        // Slot is 42×32 inside its border. Inset 2px so the icon doesn't
+        // touch the orange selection ring on the active weapon.
+        ctx.drawImage(iconImg, x + 2, sy + 2, 38, 28);
+        if (!unlocked) {
+          // dim locked icons by overlaying a translucent black
+          ctx.fillStyle = 'rgba(0,0,0,0.55)';
+          ctx.fillRect(x + 2, sy + 2, 38, 28);
+        }
+      } else {
+        ctx.save();
+        ctx.translate(x+22, sy+18);
+        drawGunPlaceholder(id);
+        ctx.restore();
+      }
     }
 
     // Top-right: score, kills, distance, combo
