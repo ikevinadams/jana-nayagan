@@ -4325,6 +4325,27 @@
   player = makePlayer();
   game.state = 'start';
   requestAnimationFrame(frame);
+
+  // Try to start the home-screen BGM immediately. Modern browsers block
+  // autoplay of audio without a user gesture, so the first attempt may
+  // silently fail — in that case we attach a one-shot listener to ANY
+  // user interaction (click / touch / keypress) which will start music
+  // the moment they engage with the page. Net effect: music plays as
+  // soon as it's allowed to.
+  startBGM();
+  if (!audioStarted || (bgmEl && bgmEl.paused)) {
+    const kickoff = () => {
+      // reset the audioStarted flag so startBGM actually retries
+      if (bgmEl && bgmEl.paused) bgmEl.play().catch(() => {});
+      else { audioStarted = false; startBGM(); }
+      window.removeEventListener('pointerdown', kickoff);
+      window.removeEventListener('keydown',     kickoff);
+      window.removeEventListener('touchstart',  kickoff);
+    };
+    window.addEventListener('pointerdown', kickoff, { once: true });
+    window.addEventListener('keydown',     kickoff, { once: true });
+    window.addEventListener('touchstart',  kickoff, { once: true });
+  }
 })();
 </script>
 </body>
