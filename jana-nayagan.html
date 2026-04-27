@@ -792,8 +792,8 @@
     // spawn timers (sec) — get faster over time
     enemyEveryMin: 0.9,
     enemyEveryMax: 2.1,
-    pickupEveryMin: 6.5,
-    pickupEveryMax: 12.0,
+    pickupEveryMin: 4.5,
+    pickupEveryMax: 8.5,
 
     // pickups
     pickup: {
@@ -816,6 +816,8 @@
   // The render code falls back to procedural silhouettes.
   const sprites = {
     hero_idle:  null,
+    hero_idle_rifle:  null,        // idle while carrying assault rifle (low-ready)
+    hero_idle_rocket: null,        // idle while shouldering rocket launcher
     hero_run:   null,             // legacy fallback (rocket launcher trail-hand sprint)
     // 2-frame walk cycles per weapon — A=left planted/right stepping, B=right planted/left stepping
     hero_run_pistol_a: null,
@@ -1503,6 +1505,30 @@
   if (isTouchDevice) {
     document.body.classList.add('is-touch');
 
+    // --- Mobile zoom-out ---
+    // On phones the action feels too cramped: enemies walk into firing range
+    // before the player has visual confirmation. Shrinking visual sprite
+    // heights ~12% and pulling the camera lead a bit further back gives the
+    // player meaningfully more right-side visibility without breaking
+    // collision math (hitboxes stay the same — they're already smaller than
+    // the visible art).
+    const MOBILE_ZOOM = 0.88;
+    CFG.playerSpriteH = Math.round(CFG.playerSpriteH * MOBILE_ZOOM);
+    for (const k in CFG.enemies) {
+      if (CFG.enemies[k].spriteH) {
+        CFG.enemies[k].spriteH = Math.round(CFG.enemies[k].spriteH * MOBILE_ZOOM);
+      }
+    }
+    // Shrink obstacle visuals + their hit widths so collisions match the new size
+    if (typeof OBSTACLE_DEFS !== 'undefined') {
+      for (const k in OBSTACLE_DEFS) {
+        const d = OBSTACLE_DEFS[k];
+        if (d.spriteH) d.spriteH = Math.round(d.spriteH * MOBILE_ZOOM);
+        if (d.hitW)    d.hitW    = Math.round(d.hitW    * MOBILE_ZOOM);
+      }
+    }
+    CFG.cameraOffsetX = 0.24;   // was 0.30; player sits further left → more right view
+
     // iOS Safari can't use the Fullscreen API on regular elements. Show a
     // subtle Add-to-Home-Screen hint on the start screen so users can launch
     // the game in standalone mode (full-screen, no chrome).
@@ -1834,8 +1860,15 @@
   }
 
   function spawnPickup(forceType, atX) {
-    const types = ['health','ammo','weapon','score'];
-    const t = forceType || choice(types);
+    // Weighted bag — health drops a lot more often than the others now that
+    // mobile players were finding the run too brutal. health 4×, ammo 2×,
+    // score 2×, weapon 1×. If the player's HP is already > 75 we drop the
+    // health weight back so we don't waste a slot on a full-tank player.
+    let pool = ['health','health','health','health','ammo','ammo','score','score','weapon'];
+    if (typeof player !== 'undefined' && player.hp > 75) {
+      pool = ['health','ammo','ammo','score','score','weapon'];
+    }
+    const t = forceType || choice(pool);
     let px = atX != null ? atX : game.cameraX + W + 80;
     // Never spawn a pickup inside an obstacle's footprint — the player can't
     // walk through obstacles, so anything inside a hit-range is unreachable.
@@ -2945,15 +2978,23 @@
     : wpn === 'smg' ? (sprites.hero_jump_rifle || sprites.hero_jump)
     : sprites.hero_jump;
 
-    let chosen = sprites.hero_idle;
+    // Per-weapon idle pose — pistol stays as the default hero_idle (already
+    // shows pistol held low). Rifle and rocket use their dedicated standing
+    // poses so the silhouette matches whatever weapon is equipped.
+    const idleSprite =
+      wpn === 'rocket' ? (sprites.hero_idle_rocket || sprites.hero_idle)
+    : wpn === 'smg'    ? (sprites.hero_idle_rifle  || sprites.hero_idle)
+    : sprites.hero_idle;
+
+    let chosen = idleSprite;
     if (shooting) {
-      chosen = shootSprite || sprites.hero_idle;
+      chosen = shootSprite || idleSprite;
     } else if (!p.onGround) {
-      chosen = jumpSprite || runSprite || sprites.hero_idle;
+      chosen = jumpSprite || runSprite || idleSprite;
     } else if (hurting) {
-      chosen = sprites.hero_hurt || sprites.hero_idle;
+      chosen = sprites.hero_hurt || idleSprite;
     } else if (moving) {
-      chosen = runSprite || sprites.hero_idle;
+      chosen = runSprite || idleSprite;
     }
 
     // Sprite bottom follows the player's actual bottom (+8 to compensate for
