@@ -1194,6 +1194,11 @@
       variants: ['obstacle_rubble_pile'],
       spriteH: 160, hitW: 320, topInset: 0.20, isPlatform: true,
       weight: 12,
+      // Visually this asset reads too bright + floaty against the dark world.
+      // Crush it with a darker filter and let the bottom edge bleed below the
+      // ground line so the pile reads as resting on the floor, not hovering.
+      filter: 'brightness(0.55) contrast(1.32) saturate(0.85)',
+      yOffset: 18,
     },
     cargo_crates: {
       variants: ['obstacle_cargo_crates','obstacle_cargo_crates_b','obstacle_cargo_crates_c'],
@@ -1385,9 +1390,12 @@
       // Layer 2 — draw the obstacle itself with reduced brightness + boosted
       // contrast so it sits darker, pulling the highlight/shadow values toward
       // crushed-blacks and away from the over-lit "sticker" look.
+      // Per-obstacle overrides (def.filter / def.yOffset) let individual props
+      // be tuned darker or sunk below the ground line without touching others.
       ctx.save();
-      ctx.filter = 'brightness(0.78) contrast(1.18) saturate(0.92)';
-      ctx.drawImage(spr, sx, o.y, o.w, o.def.spriteH);
+      ctx.filter = o.def.filter || 'brightness(0.78) contrast(1.18) saturate(0.92)';
+      const drawY = o.y + (o.def.yOffset || 0);
+      ctx.drawImage(spr, sx, drawY, o.w, o.def.spriteH);
       ctx.filter = 'none';
       ctx.restore();
 
@@ -1821,7 +1829,12 @@
   function spawnEnemy() {
     const kind = chooseEnemyKind();
     const def = CFG.enemies[kind];
-    const fromRight = Math.random() < 0.85;
+    // Player runs right; enemies should approach FROM THE RIGHT (in front).
+    // Only after 30 kills do we start mixing in left-side spawns (~15%) so
+    // the action escalates without ambushing players from off-screen behind
+    // them at the start of the run.
+    const allowLeftSpawns = game.kills >= 30;
+    const fromRight = allowLeftSpawns ? (Math.random() < 0.85) : true;
     const x = fromRight ? game.cameraX + W + 60 : game.cameraX - 100;
     enemies.push({
       kind,
