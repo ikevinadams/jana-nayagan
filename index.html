@@ -1217,13 +1217,15 @@
       weight: 8,
     },
     burning_wreck: {
-      // Tuned for single-jump clearance — player must time the jump but can
-      // make it cleanly. Smoke zone (top half) is pass-through, only the
-      // car body itself blocks horizontally.
+      // Sprite is rendered at 2× original height so the car reads big and
+      // imposing on screen, but topInset is bumped to 0.78 so the actual
+      // solid blocking hitbox (bottom 22% of sprite) is the same physical
+      // size as before — keeps the obstacle jumpable with one hop.
       variants: ['obstacle_burning_wreck','obstacle_burning_wreck_b','obstacle_burning_wreck_c'],
-      spriteH: 240, hitW: 240, topInset: 0.55, isPlatform: false,
+      spriteH: 480, hitW: 240, topInset: 0.78, isPlatform: false,
       smoke: true, smokeAtY: 0.35,
       weight: 10,
+      yOffset: 24,
     },
     robot_pile: {
       variants: ['obstacle_robot_pile','obstacle_robot_pile_b'],
@@ -1394,7 +1396,10 @@
       // be tuned darker or sunk below the ground line without touching others.
       ctx.save();
       ctx.filter = o.def.filter || 'brightness(0.78) contrast(1.18) saturate(0.92)';
-      const drawY = o.y + (o.def.yOffset || 0);
+      // Default 14px sink — every obstacle bleeds slightly below the ground
+      // line so the bottom edge feathers into the floor instead of cutting
+      // off in mid-air. Per-obstacle overrides (def.yOffset) take priority.
+      const drawY = o.y + (o.def.yOffset != null ? o.def.yOffset : 14);
       ctx.drawImage(spr, sx, drawY, o.w, o.def.spriteH);
       ctx.filter = 'none';
       ctx.restore();
@@ -2666,10 +2671,11 @@
     ctx.fillStyle = glow;
     ctx.fillRect(0,0,W,H);
 
-    // Far parallax — stretched tall, alternating flip + soft edge fade hides
-    // the seam between repeating tiles for an endless-skyline effect.
+    // Far parallax — stretched only to the haze line so the seam-band fades
+    // never bleed into the floor area (they were rendering as faint evenly-
+    // spaced vertical lines on the ground). Mirror handles seam hiding now.
     if (sprites.bg_far) {
-      drawParallaxLayer(sprites.bg_far, 0.18, 0, H * 0.95, { mirror: true, fadeEdges: true });
+      drawParallaxLayer(sprites.bg_far, 0.18, 0, H * 0.62, { mirror: true });
     } else {
       drawSkyline(0.15, '#0c0f15', H*0.62, 90);
       drawSkyline(0.30, '#13161e', H*0.66, 70);
