@@ -2369,7 +2369,9 @@
       const def = CFG.enemies[e.kind];
       // chase player
       const dir = player.x > e.x ? 1 : -1;
-      e.facing = dir;
+      // Boss spawns from the right and is canonically left-facing — locking the
+      // facing prevents the awful flip-flop when the player crosses past him.
+      if (!def.isBoss) e.facing = dir;
       const dist = Math.abs((player.x+player.w/2) - (e.x+e.w/2));
       if (def.ranged) {
         // gunners hold a stand-off distance and shoot
@@ -3271,10 +3273,11 @@
     } else {
       key = 'bot_gunner_idle';
     }
-    // Boss bent-shoot pose renders at compressed height because the body
-    // is bent forward — shorter spriteH so head doesn't tower above standing.
+    // All four boss frames have body-alpha heights within 3% of each other,
+    // so render every pose at the same target height. The previous 0.86
+    // multiplier on boss_shoot was an over-correction that made the boss
+    // visibly shrink mid-fight whenever he fired.
     let targetH = def.spriteH || (e.h * 1.1);
-    if (key === 'boss_shoot') targetH = def.spriteH * 0.86;
 
     const spr = sprites[key] || sprites.bot_gunner_idle;
     if (spr) {
