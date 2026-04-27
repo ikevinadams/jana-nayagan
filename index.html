@@ -3011,19 +3011,23 @@
     fadeUp.addColorStop(1, 'rgba(14, 15, 20, 1)');
     ctx.fillStyle = fadeUp;
     ctx.fillRect(0, baseY - 90, W, 90);
-    // Darker ground strip — moved closer to crushed black so the prop drop
-    // shadows blend in instead of contrasting against a lighter floor
+    // Darker ground strip — pushed even further toward crushed black so it
+    // reads consistent across monitors with different gamma/color profiles
+    // (Windows tends to render brighter than macOS; the deeper crush keeps
+    // the floor solidly dark on both).
     const grd = ctx.createLinearGradient(0, baseY, 0, H);
-    grd.addColorStop(0, '#0e1015');
-    grd.addColorStop(0.4, '#070809');
-    grd.addColorStop(1, '#020303');
+    grd.addColorStop(0,   '#070810');
+    grd.addColorStop(0.3, '#040506');
+    grd.addColorStop(0.7, '#020203');
+    grd.addColorStop(1,   '#000000');
     ctx.fillStyle = grd;
     ctx.fillRect(0, baseY, W, H-baseY);
-    // Vignetting wash across the floor — softens the pure-rectangle look
+    // Stronger vignette wash — bumps contrast across the floor, hiding the
+    // gradient banding and pulling the eye toward the action above.
     const vig = ctx.createLinearGradient(0, baseY, 0, H);
-    vig.addColorStop(0,   'rgba(0,0,0,0.0)');
-    vig.addColorStop(0.7, 'rgba(0,0,0,0.30)');
-    vig.addColorStop(1,   'rgba(0,0,0,0.55)');
+    vig.addColorStop(0,   'rgba(0,0,0,0.10)');
+    vig.addColorStop(0.5, 'rgba(0,0,0,0.45)');
+    vig.addColorStop(1,   'rgba(0,0,0,0.75)');
     ctx.fillStyle = vig;
     ctx.fillRect(0, baseY, W, H-baseY);
     // (Metal panel seams + rivets removed — they were drawing as evenly-
@@ -3903,26 +3907,15 @@
       ctx.strokeStyle = active ? '#ff5a1f' : (unlocked ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.08)');
       ctx.lineWidth = 1.5;
       ctx.strokeRect(x, sy, 42, 32);
-      // number
-      ctx.fillStyle = unlocked ? '#fff' : 'rgba(255,255,255,0.3)';
-      ctx.font = 'bold 10px system-ui, sans-serif';
-      ctx.fillText(String(i+1), x + 4, sy + 11);
-      // ammo count
-      ctx.font = '10px system-ui, sans-serif';
-      ctx.textAlign = 'right';
-      const cAmmo = game.ammo[id];
-      ctx.fillText(cAmmo === Infinity ? '∞' : cAmmo, x + 38, sy + 28);
-      ctx.textAlign = 'left';
       // mini weapon icon — use the cropped hero-sprite icon if loaded,
-      // otherwise fall back to the procedural placeholder.
+      // otherwise fall back to the procedural placeholder. Icon fills the
+      // whole slot (the number used to live inside, but it's now under the
+      // slot as a key cap so the gun has the full icon area).
       const iconKey = 'weapon_icon_' + (id === 'smg' ? 'rifle' : id);
       const iconImg = sprites[iconKey];
       if (iconImg) {
-        // Slot is 42×32 inside its border. Inset 2px so the icon doesn't
-        // touch the orange selection ring on the active weapon.
         ctx.drawImage(iconImg, x + 2, sy + 2, 38, 28);
         if (!unlocked) {
-          // dim locked icons by overlaying a translucent black
           ctx.fillStyle = 'rgba(0,0,0,0.55)';
           ctx.fillRect(x + 2, sy + 2, 38, 28);
         }
@@ -3932,6 +3925,31 @@
         drawGunPlaceholder(id);
         ctx.restore();
       }
+      // ammo count — bottom-right corner of slot, shadow for legibility
+      ctx.font = 'bold 10px system-ui, sans-serif';
+      ctx.textAlign = 'right';
+      const cAmmo = game.ammo[id];
+      const ammoStr = cAmmo === Infinity ? '∞' : String(cAmmo);
+      ctx.fillStyle = 'rgba(0,0,0,0.85)';
+      ctx.fillText(ammoStr, x + 39, sy + 30);
+      ctx.fillStyle = '#fff';
+      ctx.fillText(ammoStr, x + 38, sy + 29);
+      ctx.textAlign = 'left';
+      // Keybind cap UNDER the slot (e.g. [1] [2] [3]) so the icon area is
+      // free for the weapon visual. Active slot's key glows orange.
+      const capW = 18, capH = 14;
+      const capX = x + 21 - capW / 2;
+      const capY = sy + 32 + 4;
+      ctx.fillStyle = active ? 'rgba(255,90,31,0.85)' : 'rgba(0,0,0,0.65)';
+      ctx.fillRect(capX, capY, capW, capH);
+      ctx.strokeStyle = active ? '#ffae3d' : (unlocked ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.15)');
+      ctx.lineWidth = 1;
+      ctx.strokeRect(capX + 0.5, capY + 0.5, capW - 1, capH - 1);
+      ctx.fillStyle = active ? '#1a1a1a' : (unlocked ? '#fff' : 'rgba(255,255,255,0.4)');
+      ctx.font = 'bold 10px ui-monospace, Menlo, Consolas, monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(String(i+1), capX + capW/2, capY + 10);
+      ctx.textAlign = 'left';
     }
 
     // Top-right: score, kills, distance, combo
