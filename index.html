@@ -2492,18 +2492,28 @@
     const prevX = p.x;
     p.x += p.vx * dt;
     for (const o of obstacles) {
-      const overlapX = p.x + p.w > o.hitX && p.x < o.hitX + o.hitW;
-      if (!overlapX) continue;
-      const isBelow = (p.y + p.h) > (o.topY + 6);
-      if (!isBelow) continue;
-      // Platforms: phase through the side while airborne so the hero can rise
-      // up alongside, then land on top via findLandingY.
-      if (o.def.isPlatform && !p.onGround) continue;
-      // Push back to before contact
-      if (p.vx > 0)      p.x = o.hitX - p.w;
-      else if (p.vx < 0) p.x = o.hitX + o.hitW;
-      else               p.x = prevX;
-      p.vx = 0;
+      // Per-TIER horizontal blocking. Previously we used the obstacle's
+      // global highest topY (o.topY) for the wall check, which meant a
+      // multi-tier obstacle like cargo_crates blocked across its entire
+      // hitW even when the player was already standing on one of its
+      // lower tiers — visible as "pushed sideways off the container".
+      // Each tier is its own discrete wall now: it only blocks within
+      // its own x0..x1 range AND only when player feet are below ITS topY.
+      for (const t of o.tiers) {
+        const overlapX = p.x + p.w > t.x0 && p.x < t.x1;
+        if (!overlapX) continue;
+        const isBelow = (p.y + p.h) > (t.topY + 6);
+        if (!isBelow) continue;
+        // Platforms: phase through the side while airborne so the hero can
+        // rise up alongside, then land on top via findLandingY.
+        if (o.def.isPlatform && !p.onGround) continue;
+        // Push back to before contact, against THIS tier's edge.
+        if (p.vx > 0)      p.x = t.x0 - p.w;
+        else if (p.vx < 0) p.x = t.x1;
+        else               p.x = prevX;
+        p.vx = 0;
+        break;     // resolved against one tier — no need to check others on this obstacle
+      }
     }
     p.y += p.vy * dt;
 
