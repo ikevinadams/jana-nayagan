@@ -731,8 +731,12 @@
   let W = 0, H = 0, DPR = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
   function resize() {
     DPR = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
-    W = window.innerWidth;
-    H = window.innerHeight;
+    // visualViewport is more reliable than innerWidth/innerHeight in iOS
+    // standalone PWAs — innerWidth often returns stale values for several
+    // frames after rotation. Fall back to innerWidth/Height when unsupported.
+    const vv = window.visualViewport;
+    W = (vv && vv.width)  || window.innerWidth;
+    H = (vv && vv.height) || window.innerHeight;
     canvas.width  = Math.floor(W * DPR);
     canvas.height = Math.floor(H * DPR);
     canvas.style.width  = W + 'px';
@@ -740,6 +744,23 @@
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   }
   window.addEventListener('resize', resize);
+  // iOS standalone bug: orientationchange fires BEFORE the viewport finishes
+  // rotating, so a synchronous resize reads the OLD dimensions. We schedule
+  // multiple retries (50ms, 200ms, 500ms, 1000ms) to catch the moment iOS
+  // finally commits the new viewport. Cheap and idempotent.
+  function rotationResize() {
+    resize();
+    setTimeout(resize, 50);
+    setTimeout(resize, 200);
+    setTimeout(resize, 500);
+    setTimeout(resize, 1000);
+  }
+  window.addEventListener('orientationchange', rotationResize);
+  // visualViewport.resize fires reliably on iOS when the actual layout
+  // viewport finishes settling — best signal we have on iOS PWAs.
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', resize);
+  }
   resize();
 
   // ------------- Config -------------
