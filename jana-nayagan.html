@@ -12,6 +12,17 @@
 <link rel="icon" type="image/png" sizes="192x192" href="favicon-192.png" />
 <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
 <meta name="theme-color" content="#0a0d14" />
+<!-- Vercel Web Analytics — calls inject() as documented, loaded as ESM
+     from CDN since this project has no npm/bundler setup. -->
+<script type="module">
+  import { inject } from "https://cdn.jsdelivr.net/npm/@vercel/analytics@1/dist/index.mjs";
+  inject();
+</script>
+<!-- Vercel Speed Insights (Core Web Vitals — Pro plan) -->
+<script type="module">
+  import { injectSpeedInsights } from "https://cdn.jsdelivr.net/npm/@vercel/speed-insights@1/dist/index.mjs";
+  injectSpeedInsights();
+</script>
 <style>
   :root {
     --ui:        #f4f1ea;
@@ -564,11 +575,109 @@
     0%, 100% { box-shadow: 0 4px 18px rgba(255,90,31,0.18); }
     50%      { box-shadow: 0 4px 26px rgba(255,90,31,0.45); }
   }
+
+  /* ============================================================
+     LOADING SCREEN
+     Shown after PLAY GAME is tapped while game assets load.
+     Painted background image + animated "LOADING…" text overlay.
+     Fades in / out for cinematic transition between home and game.
+     ============================================================ */
+  #loading {
+    position: absolute;
+    inset: 0;
+    z-index: 100;
+    display: none;
+    background: #060709 url('sprites/loading_screen.jpg') center center / cover no-repeat;
+    align-items: flex-end;
+    justify-content: center;
+    padding-bottom: 6vh;
+    opacity: 0;
+    transition: opacity 0.35s ease;
+    pointer-events: none;
+  }
+  #loading.visible {
+    display: flex;
+    opacity: 1;
+    pointer-events: auto;
+  }
+  /* Bottom gradient so the LOADING text sits cleanly over busy artwork */
+  #loading::after {
+    content: "";
+    position: absolute;
+    inset: 50% 0 0 0;
+    background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(4,5,8,0.85) 100%);
+    pointer-events: none;
+  }
+  .loading-stack {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+  .loading-text {
+    font-size: 14px;
+    letter-spacing: 8px;
+    font-weight: 800;
+    color: #ffd57a;
+    text-transform: uppercase;
+    text-shadow: 0 2px 12px rgba(0,0,0,0.85), 0 0 24px rgba(255,90,31,0.25);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  }
+  .loading-text .dots {
+    display: inline-block;
+    width: 1.6em;
+    text-align: left;
+  }
+  .loading-bar-track {
+    width: min(320px, 60vw);
+    height: 3px;
+    background: rgba(255,255,255,0.10);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .loading-bar-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #ffb02e 0%, #ff5a1f 100%);
+    box-shadow: 0 0 12px rgba(255,90,31,0.55);
+    transition: width 0.25s ease;
+  }
+  .loading-tip {
+    font-size: 11px;
+    letter-spacing: 2px;
+    color: rgba(255,255,255,0.55);
+    text-transform: uppercase;
+    margin-top: 4px;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.85);
+    min-height: 14px;
+    transition: opacity 0.3s ease;
+  }
+
+  /* Slow-connection mode — hide the home video and let the static poster
+     image (already declared on the <video> element) show through. We
+     also skip the JS that wires up the playlist in this mode. */
+  body.is-slow-bw #homeBg {
+    display: none;
+  }
+  body.is-slow-bw #start {
+    background: #060709 url('sprites/home_cover.png') center center / cover no-repeat;
+  }
 </style>
 </head>
 <body>
   <div id="wrap">
     <canvas id="game"></canvas>
+
+    <!-- Loading screen (shown after PLAY GAME tap while assets stream in) -->
+    <div id="loading">
+      <div class="loading-stack">
+        <div class="loading-text">LOADING<span class="dots" id="loadingDots">.</span></div>
+        <div class="loading-bar-track"><div class="loading-bar-fill" id="loadingBar"></div></div>
+        <div class="loading-tip" id="loadingTip">&nbsp;</div>
+      </div>
+    </div>
 
     <!-- Start screen — cinematic home cover -->
     <div id="start" class="overlay home-overlay">
@@ -1131,10 +1240,28 @@
   // order, then loops back to the first when the last one ends.
   // Single edited sequence on loop. The playlist driver still cycles back
   // when this clip ends, giving us a clean restart every iteration.
+  // ------------- Slow-connection detection -------------
+  // Network Information API gives us effectiveType ('slow-2g' | '2g' |
+  // '3g' | '4g'), downlink (Mbps), saveData (user opted into Data Saver).
+  // Safari doesn't support it — those users default to fast mode.
+  // When slow, body gets `is-slow-bw` class which: (a) hides the home
+  // video and shows the static poster image instead, (b) shortens the
+  // minimum loading-screen time (since they NEED that visible feedback).
+  const SLOW_BW = (() => {
+    const c = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+    if (!c) return false;
+    if (c.saveData) return true;
+    if (c.effectiveType === 'slow-2g' || c.effectiveType === '2g') return true;
+    if (typeof c.downlink === 'number' && c.downlink > 0 && c.downlink < 1.5) return true;
+    return false;
+  })();
+  if (SLOW_BW) document.body.classList.add('is-slow-bw');
+
   const HOME_VIDEOS = [
     'sprites/home_loop.mp4',
   ];
   function setupHomeVideoPlaylist() {
+    if (SLOW_BW) return;     // skip video entirely on slow connections
     const v = document.getElementById('homeBg');
     if (!v) return;
     let idx = 0;
@@ -1165,15 +1292,33 @@
   // Cache-bust on every load so the browser doesn't serve stale PNGs
   // when sprites have been re-flipped or re-cleaned on disk.
   const SPRITE_CACHE_BUST = Date.now();
-  function loadSprites() {
-    for (const k of Object.keys(sprites)) {
-      const img = new Image();
-      img.onload  = () => { sprites[k] = img; };
-      img.onerror = () => { /* placeholder fallback handles this */ };
-      img.src = `sprites/${k}.png?v=${SPRITE_CACHE_BUST}`;
-    }
+  // Promise-based loader. Returns a promise that resolves when ALL sprites
+  // finish (success or error — errors don't block, the placeholder fallback
+  // handles missing files). onProgress receives 0..1.
+  let _spritesLoaded = false;
+  function loadSprites(onProgress) {
+    if (_spritesLoaded) return Promise.resolve();
+    _spritesLoaded = true;
+    const keys = Object.keys(sprites);
+    let done = 0;
+    return new Promise((resolve) => {
+      if (keys.length === 0) { resolve(); return; }
+      keys.forEach(k => {
+        const img = new Image();
+        const finish = () => {
+          done += 1;
+          if (onProgress) onProgress(done / keys.length);
+          if (done === keys.length) resolve();
+        };
+        img.onload  = () => { sprites[k] = img; finish(); };
+        img.onerror = () => { finish(); };       // missing file → still count as done
+        img.src = `sprites/${k}.png?v=${SPRITE_CACHE_BUST}`;
+      });
+    });
   }
-  loadSprites();
+  // NOTE: loadSprites() is no longer called on boot — it's now triggered
+  // from startGame() so the home screen loads instantly and the heavy
+  // sprite payload only downloads when the player commits to playing.
 
   // Tile a panoramic background sprite horizontally with parallax scroll.
   // `parFactor` 0..1 controls how much the layer scrolls with the camera.
@@ -4127,14 +4272,83 @@
   }
 
   // ------------- Game flow -------------
+  // Loading-screen helpers — animated dots + progress bar + tip rotation
+  const LOADING_TIPS = [
+    'TAP THE RIGHT TO SHOOT',
+    'HEAL ORBS DROP AFTER KILLS',
+    'BOSSES APPEAR EVERY 50 KILLS',
+    'JUMP CLEARS BURNING WRECKS',
+    'STAND ON CONCRETE FOR HIGH GROUND',
+    'CROUCH ON DOWN TO AIM LOW',
+    'SCROLL WHEEL CYCLES WEAPONS',
+  ];
+  let _loadingDotsTimer = null;
+  let _loadingTipTimer = null;
+  function showLoadingScreen() {
+    const el = document.getElementById('loading');
+    if (!el) return;
+    el.classList.add('visible');
+    document.getElementById('loadingBar').style.width = '0%';
+    // Animate the trailing dots
+    let n = 1;
+    const dotsEl = document.getElementById('loadingDots');
+    _loadingDotsTimer = setInterval(() => {
+      n = (n % 3) + 1;
+      if (dotsEl) dotsEl.textContent = '.'.repeat(n);
+    }, 320);
+    // Rotate gameplay tips
+    const tipEl = document.getElementById('loadingTip');
+    let tipIdx = Math.floor(Math.random() * LOADING_TIPS.length);
+    if (tipEl) tipEl.textContent = LOADING_TIPS[tipIdx];
+    _loadingTipTimer = setInterval(() => {
+      if (!tipEl) return;
+      tipEl.style.opacity = '0';
+      setTimeout(() => {
+        tipIdx = (tipIdx + 1) % LOADING_TIPS.length;
+        tipEl.textContent = LOADING_TIPS[tipIdx];
+        tipEl.style.opacity = '';
+      }, 250);
+    }, 3500);
+  }
+  function setLoadingProgress(frac) {
+    const bar = document.getElementById('loadingBar');
+    if (bar) bar.style.width = (Math.max(0, Math.min(1, frac)) * 100) + '%';
+  }
+  function hideLoadingScreen() {
+    const el = document.getElementById('loading');
+    if (el) el.classList.remove('visible');
+    if (_loadingDotsTimer) { clearInterval(_loadingDotsTimer); _loadingDotsTimer = null; }
+    if (_loadingTipTimer)  { clearInterval(_loadingTipTimer);  _loadingTipTimer  = null; }
+  }
+
   function startGame() {
+    // Hide all overlays except the loading screen
     document.getElementById('start').classList.add('hidden');
     document.getElementById('gameover').classList.add('hidden');
     document.getElementById('pause').classList.add('hidden');
     document.getElementById('continue').classList.add('hidden');
-    resetRun();
-    game.state = 'play';
-    startBGM();   // user gesture (button click) lets browser autoplay audio
+    // Show the loading screen and start streaming game assets. We hold a
+    // minimum visible duration (600ms on fast / 250ms on slow because slow
+    // users will already see the bar fill slowly) so the transition feels
+    // intentional, not like a flicker.
+    const minDuration = SLOW_BW ? 250 : 600;
+    const startedAt = performance.now();
+    showLoadingScreen();
+    setLoadingProgress(0.02);   // tiny initial bar so it doesn't look broken
+    Promise.all([
+      loadSprites(setLoadingProgress),
+      // Token min-duration delay; resolves in parallel with sprites.
+      new Promise(r => setTimeout(r, minDuration)),
+    ]).then(() => {
+      // One final paint of 100% before fade-out so the bar visibly fills.
+      setLoadingProgress(1);
+      setTimeout(() => {
+        hideLoadingScreen();
+        resetRun();
+        game.state = 'play';
+        startBGM();
+      }, 220);
+    });
   }
 
   function showContinueChoice() {
