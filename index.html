@@ -1702,6 +1702,35 @@
   });
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
+  // ------------- Scroll-wheel weapon cycle (PC only) -------------
+  // Cycles through UNLOCKED + AMMO-AVAILABLE weapons in order. Wheel up/
+  // forward = next weapon, wheel down/back = previous. The handler skips
+  // touch devices entirely — mobile users have explicit weapon buttons.
+  canvas.addEventListener('wheel', (e) => {
+    if (typeof isTouchDevice !== 'undefined' && isTouchDevice) return;
+    if (game.state !== 'play') return;
+    e.preventDefault();
+    const order = ['pistol', 'smg', 'rocket'];
+    // Build the list of slots the player can actually switch TO right now.
+    const valid = order.filter(k =>
+      game.weaponsUnlocked && game.weaponsUnlocked[k] &&
+      (k === 'pistol' || (game.ammo && game.ammo[k] > 0))
+    );
+    if (valid.length === 0) return;
+    let idx = valid.indexOf(player.currentWeapon);
+    if (idx === -1) idx = 0;
+    // deltaY > 0 = wheel scrolled DOWN (toward you) → next weapon.
+    // deltaY < 0 = wheel scrolled UP (away from you) → previous weapon.
+    const step = e.deltaY > 0 ? 1 : -1;
+    const next = valid[(idx + step + valid.length) % valid.length];
+    if (next && next !== player.currentWeapon) {
+      // route through the existing switch system so HUD + touch icons
+      // refresh consistently.
+      const slotMap = { pistol: 1, smg: 2, rocket: 3 };
+      input.switch = slotMap[next];
+    }
+  }, { passive: false });
+
   // ------------- Mobile touch controls -------------
   const isTouchDevice = (
     'ontouchstart' in window ||
@@ -2442,9 +2471,22 @@
     game.comboTimer = Math.max(0, game.comboTimer - dt);
     if (game.comboTimer === 0) game.combo = 0;
 
-    // camera follow
-    const targetCam = player.x - W * CFG.cameraOffsetX;
-    game.cameraX = lerp(game.cameraX, targetCam, 1 - Math.exp(-CFG.cameraLerp*dt));
+    // camera follow — but during a boss fight we lock the camera in place
+    // so the player can't outrun the boss off-screen. The arena freezes
+    // until the boss is defeated (or the player dies).
+    if (!game.bossActive) {
+      const targetCam = player.x - W * CFG.cameraOffsetX;
+      game.cameraX = lerp(game.cameraX, targetCam, 1 - Math.exp(-CFG.cameraLerp*dt));
+    }
+    // Player containment during boss fight — clamp player to the visible
+    // arena so they can't run past the boss to the right or fall off the
+    // left side of the camera window.
+    if (game.bossActive) {
+      const arenaLeft  = game.cameraX + 30;
+      const arenaRight = game.cameraX + W - player.w - 30;
+      if (player.x < arenaLeft)  { player.x = arenaLeft;  if (player.vx < 0) player.vx = 0; }
+      if (player.x > arenaRight) { player.x = arenaRight; if (player.vx > 0) player.vx = 0; }
+    }
     game.shake = Math.max(0, game.shake - 60*dt);
 
     // game over
@@ -2673,8 +2715,20 @@
       if (def.ranged) {
         // gunners hold a stand-off distance and shoot
         const stand = 320;
-        if (dist > stand + 30) e.x += dir * def.speed * dt;
+        // Boss gets a speed multiplier that scales with distance — if the
+        // player runs to one side of the arena, the boss accelerates to
+        // close the gap so he can never be left behind off-screen.
+        let speedMult = 1;
+        if (def.isBoss) speedMult = 1 + Math.min(2.5, Math.max(0, (dist - stand) / 200));
+        if (dist > stand + 30) e.x += dir * def.speed * speedMult * dt;
         else if (dist < stand - 30) e.x -= dir * def.speed * 0.6 * dt;
+        // Keep the boss clamped inside the visible arena no matter what.
+        if (def.isBoss) {
+          const arenaLeftBoss  = game.cameraX + 80;
+          const arenaRightBoss = game.cameraX + W - e.w - 80;
+          if (e.x < arenaLeftBoss)  e.x = arenaLeftBoss;
+          if (e.x > arenaRightBoss) e.x = arenaRightBoss;
+        }
         e.attackCooldown -= dt;
         if (e.attackCooldown <= 0 && dist < 700 && game.state==='play') {
           // Per-enemy stat overrides (set on boss spawn) fall back to def.
