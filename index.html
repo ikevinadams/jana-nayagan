@@ -655,13 +655,20 @@
     transition: opacity 0.3s ease;
   }
 
-  /* Slow-connection mode — hide the home video and let the static poster
-     image (already declared on the <video> element) show through. We
-     also skip the JS that wires up the playlist in this mode. */
-  body.is-slow-bw #homeBg {
+  /* Hide the home video and let the static cover image show through.
+     Two triggers:
+       - is-slow-bw    → user is on a slow network (auto-detected)
+       - is-static-bg  → manually disabled video for ALL users
+     Both reuse the same CSS so flipping USE_HOME_VIDEO in JS is a one-
+     line revert. Static cover is delivered via background-image on the
+     start screen rather than the <video> poster (poster only works while
+     a real video element is present). */
+  body.is-slow-bw #homeBg,
+  body.is-static-bg #homeBg {
     display: none;
   }
-  body.is-slow-bw #start {
+  body.is-slow-bw #start,
+  body.is-static-bg #start {
     background: #060709 url('sprites/home_cover.jpg') center center / cover no-repeat;
   }
 </style>
@@ -1240,6 +1247,14 @@
   // order, then loops back to the first when the last one ends.
   // Single edited sequence on loop. The playlist driver still cycles back
   // when this clip ends, giving us a clean restart every iteration.
+  // ------------- Home background mode -------------
+  // FLIP THIS TO `true` to bring back the looping home-screen video.
+  // The video file (sprites/home_loop.mp4) stays on disk; this flag is
+  // the only code change needed to switch back. Static-image mode also
+  // saves ~1 MB per cold load and removes a class of iOS PWA quirks.
+  const USE_HOME_VIDEO = false;
+  if (!USE_HOME_VIDEO) document.body.classList.add('is-static-bg');
+
   // ------------- Slow-connection detection -------------
   // Network Information API gives us effectiveType ('slow-2g' | '2g' |
   // '3g' | '4g'), downlink (Mbps), saveData (user opted into Data Saver).
@@ -1261,6 +1276,7 @@
     'sprites/home_loop.mp4',
   ];
   function setupHomeVideoPlaylist() {
+    if (!USE_HOME_VIDEO) return; // global toggle — flip true to bring video back
     if (SLOW_BW) return;     // skip video entirely on slow connections
     const v = document.getElementById('homeBg');
     if (!v) return;
