@@ -1106,7 +1106,9 @@
     audioStarted = true;
     ensureAudio();
     if (!bgmEl) {
-      bgmEl = new Audio('audio/bgm.mp3');
+      // AAC m4a — 31% smaller than the original MP3, transparent quality.
+      // The original audio/bgm.mp3 is kept on disk for trivial revert.
+      bgmEl = new Audio('audio/bgm.m4a');
       bgmEl.loop = true;
       bgmEl.volume = 0.16;     // softer so SFX punch through
     }
