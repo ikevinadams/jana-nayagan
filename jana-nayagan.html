@@ -1081,9 +1081,12 @@
     if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
     if (!sfxPoolsBuilt) {
       sfxPoolsBuilt = true;
-      buildSfxPool('pistol', 'audio/sfx_pistol.wav');
-      buildSfxPool('rifle',  'audio/sfx_rifle.wav');
-      buildSfxPool('rocket', 'audio/sfx_rocket.wav');
+      // SFX moved from uncompressed WAV to AAC m4a (mono 64k) — 97% smaller
+      // with zero perceptible quality difference for short gunshot bursts.
+      // Originals (.wav) are kept on disk for trivial revert.
+      buildSfxPool('pistol', 'audio/sfx_pistol.m4a');
+      buildSfxPool('rifle',  'audio/sfx_rifle.m4a');
+      buildSfxPool('rocket', 'audio/sfx_rocket.m4a');
     }
   }
 
@@ -1315,9 +1318,24 @@
   // Cache-bust on every load so the browser doesn't serve stale PNGs
   // when sprites have been re-flipped or re-cleaned on disk.
   const SPRITE_CACHE_BUST = Date.now();
+  // WebP feature detection — done once, used for the whole sprite payload.
+  // Modern browsers (~96% globally, including Chrome/Firefox/Edge/Safari iOS
+  // 14+ / macOS 11+) support WebP and get the smaller files. Older browsers
+  // fall back to the PNG copies which are still on disk for revert/safety.
+  const SPRITE_EXT = (() => {
+    try {
+      const c = document.createElement('canvas');
+      if (c.toDataURL && c.toDataURL('image/webp').indexOf('data:image/webp') === 0) {
+        return 'webp';
+      }
+    } catch (e) {}
+    return 'png';
+  })();
   // Promise-based loader. Returns a promise that resolves when ALL sprites
   // finish (success or error — errors don't block, the placeholder fallback
-  // handles missing files). onProgress receives 0..1.
+  // handles missing files). onProgress receives 0..1. If a .webp request
+  // 404s on a brand-new sprite that hasn't been re-encoded yet, we fall
+  // back to .png automatically so we never break for any single missing file.
   let _spritesLoaded = false;
   function loadSprites(onProgress) {
     if (_spritesLoaded) return Promise.resolve();
@@ -1334,8 +1352,19 @@
           if (done === keys.length) resolve();
         };
         img.onload  = () => { sprites[k] = img; finish(); };
-        img.onerror = () => { finish(); };       // missing file → still count as done
-        img.src = `sprites/${k}.png?v=${SPRITE_CACHE_BUST}`;
+        img.onerror = () => {
+          // If the preferred extension fails (e.g. .webp not yet generated),
+          // try .png as a fallback before giving up.
+          if (SPRITE_EXT !== 'png') {
+            const fb = new Image();
+            fb.onload  = () => { sprites[k] = fb; finish(); };
+            fb.onerror = () => { finish(); };
+            fb.src = `sprites/${k}.png?v=${SPRITE_CACHE_BUST}`;
+          } else {
+            finish();
+          }
+        };
+        img.src = `sprites/${k}.${SPRITE_EXT}?v=${SPRITE_CACHE_BUST}`;
       });
     });
   }
